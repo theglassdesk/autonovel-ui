@@ -59,7 +59,7 @@ export function Workspace() {
     try {
       const endpointURL = state.settings.provider === 'local' ? state.settings.apiUrl : '/api';
       const result = await generateOutline(endpointURL, state.settings.model, state.settings.systemPrompt, project.synopsis, project.characters, project.targetChapterCount || 10, project.outlineTemplate || '', state.settings.provider);
-      
+
       // Initialize chapter data based on outline
       const newChapters = result.map((c: any) => ({
         id: crypto.randomUUID(),
@@ -82,9 +82,9 @@ export function Workspace() {
     try {
       const endpointURL = state.settings.provider === 'local' ? state.settings.apiUrl : '/api';
       const newOutlineData = await continueOutline(endpointURL, state.settings.model, state.settings.systemPrompt, project.synopsis, project.characters, project.outline, project.outlineTemplate || '', state.settings.provider);
-      
+
       const combinedOutline = [...project.outline, ...newOutlineData];
-      
+
       // Initialize chapter data based on new outline items
       const newChapters = newOutlineData.map((c: any) => ({
         id: crypto.randomUUID(),
@@ -93,9 +93,9 @@ export function Workspace() {
         status: 'pending'
       }));
 
-      updateProject(project.id, { 
-        outline: combinedOutline, 
-        chapters: [...project.chapters, ...newChapters] 
+      updateProject(project.id, {
+        outline: combinedOutline,
+        chapters: [...project.chapters, ...newChapters]
       });
     } catch (e: any) {
       setError(e.message);
@@ -120,7 +120,7 @@ export function Workspace() {
       };
       const currentChapter = project.chapters.find(c => c.chapterNumber === chapNum);
       const existingContent = currentChapter?.content || undefined;
-      const result = await generateChapter(endpointURL, state.settings.model, state.settings.systemPrompt, project.synopsis, project.outline, chapNum, state.settings.provider, guardrails, existingContent, project.povType);
+      const result = await generateChapter(endpointURL, state.settings.model, state.settings.systemPrompt, project.synopsis, project.outline, chapNum, state.settings.provider, guardrails, existingContent, project.povType || 'First Person (I/me)');
       updateProject(project.id, {
         chapters: project.chapters.map(c => c.chapterNumber === chapNum ? { ...c, content: result, status: 'drafted' } : c)
       });
@@ -156,7 +156,7 @@ export function Workspace() {
       content += `## Chapter ${c.chapterNumber}: ${outlineInfo?.title || ''}\n\n`;
       content += `${c.content}\n\n`;
     }
-    
+
     const blob = new Blob([content], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -188,15 +188,15 @@ export function Workspace() {
       {/* Header */}
       <div className="h-14 border-b border-white/20 flex items-center justify-between px-6 shrink-0 bg-white/20 z-10 w-full pl-6">
         <div className="flex-1 flex max-w-lg items-center relative group">
-          <input 
-            type="text" 
-            value={project.title} 
+          <input
+            type="text"
+            value={project.title}
             onChange={e => updateProject(project.id, { title: e.target.value })}
             className="text-lg font-medium text-slate-900 focus:outline-none placeholder-slate-400 bg-transparent w-full truncate"
             placeholder="Novel Title"
           />
           {project.synopsis && (
-            <button 
+            <button
               onClick={handleGenerateTitle}
               disabled={loading === 'title'}
               className="ml-2 p-1.5 shrink-0 text-indigo-500 hover:bg-white/40 rounded transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100"
@@ -206,10 +206,10 @@ export function Workspace() {
             </button>
           )}
         </div>
-        
+
         <div className="flex items-center gap-3">
           {hasChapters && (
-            <button 
+            <button
               onClick={handleDownloadDraft}
               className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500 text-white hover:bg-indigo-600 text-xs font-medium rounded-lg transition-colors shadow-sm"
               title="Download Full Draft"
@@ -218,18 +218,18 @@ export function Workspace() {
             </button>
           )}
           <div className="flex items-center gap-1 bg-white/20 p-1 rounded-lg border border-white/20">
-          <button 
-            onClick={() => setActiveTab('foundation')}
-            className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === 'foundation' ? 'bg-white/60 shadow-sm text-slate-900' : 'text-slate-600 hover:text-slate-900 hover:bg-white/20'}`}
-          >
-            Foundation
-          </button>
-          <button 
-            onClick={() => setActiveTab('drafting')}
-            className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === 'drafting' ? 'bg-white/60 shadow-sm text-slate-900' : 'text-slate-600 hover:text-slate-900 hover:bg-white/20'}`}
-          >
-            Drafting
-          </button>
+            <button
+              onClick={() => setActiveTab('foundation')}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === 'foundation' ? 'bg-white/60 shadow-sm text-slate-900' : 'text-slate-600 hover:text-slate-900 hover:bg-white/20'}`}
+            >
+              Foundation
+            </button>
+            <button
+              onClick={() => setActiveTab('drafting')}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === 'drafting' ? 'bg-white/60 shadow-sm text-slate-900' : 'text-slate-600 hover:text-slate-900 hover:bg-white/20'}`}
+            >
+              Drafting
+            </button>
           </div>
         </div>
       </div>
@@ -242,24 +242,24 @@ export function Workspace() {
 
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto px-6 py-8">
-        
+
         {activeTab === 'foundation' && (
           <div className="max-w-3xl mx-auto space-y-12 pb-12">
-            
+
             {/* Step 1: Premise */}
             <section className="space-y-3">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded bg-blue-50 text-blue-500 flex items-center justify-center"><FileText size={14}/></div>
+                <div className="w-6 h-6 rounded bg-blue-50 text-blue-500 flex items-center justify-center"><FileText size={14} /></div>
                 <h3 className="font-medium text-slate-900">1. Premise</h3>
               </div>
-              <textarea 
+              <textarea
                 value={project.premise}
                 onChange={e => updateProject(project.id, { premise: e.target.value })}
                 placeholder="What is your novel about? (e.g. A young programmer discovers her code can alter reality...)"
                 className="w-full h-24 p-3 border border-white/40 rounded-lg text-sm bg-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white/60 shadow-sm resize-none"
               />
               <div className="flex justify-end">
-                <button 
+                <button
                   onClick={handleGenerateSynopsis}
                   disabled={loading === 'synopsis' || !project.premise}
                   className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
@@ -274,16 +274,16 @@ export function Workspace() {
             {project.synopsis && (
               <section className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded bg-purple-50 text-purple-500 flex items-center justify-center"><FileText size={14}/></div>
+                  <div className="w-6 h-6 rounded bg-purple-50 text-purple-500 flex items-center justify-center"><FileText size={14} /></div>
                   <h3 className="font-medium text-slate-900">2. Expanded Synopsis</h3>
                 </div>
-                <textarea 
+                <textarea
                   value={project.synopsis}
                   onChange={e => updateProject(project.id, { synopsis: e.target.value })}
                   className="w-full h-48 p-3 border border-white/40 rounded-lg text-sm bg-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white/60 shadow-sm resize-none"
                 />
                 <div className="flex justify-end">
-                  <button 
+                  <button
                     onClick={handleGenerateCharacters}
                     disabled={loading === 'characters' || !project.synopsis}
                     className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
@@ -299,7 +299,7 @@ export function Workspace() {
             {project.characters.length > 0 && (
               <section className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded bg-emerald-50 text-emerald-500 flex items-center justify-center"><Users size={14}/></div>
+                  <div className="w-6 h-6 rounded bg-emerald-50 text-emerald-500 flex items-center justify-center"><Users size={14} /></div>
                   <h3 className="font-medium text-slate-900">3. Cast</h3>
                 </div>
                 <div className="grid grid-cols-1 gap-3">
@@ -310,14 +310,14 @@ export function Workspace() {
                           const newChar = [...project.characters];
                           newChar[i].name = e.target.value;
                           updateProject(project.id, { characters: newChar });
-                        }}/>
+                        }} />
                         <span className="text-xs font-medium text-indigo-700 bg-indigo-100/80 px-2 py-0.5 rounded uppercase tracking-wider">{c.role}</span>
                       </div>
                       <textarea className="text-sm text-slate-700 bg-transparent w-full resize-none h-16 outline-none mt-2" value={c.description} onChange={(e) => {
-                          const newChar = [...project.characters];
-                          newChar[i].description = e.target.value;
-                          updateProject(project.id, { characters: newChar });
-                        }}/>
+                        const newChar = [...project.characters];
+                        newChar[i].description = e.target.value;
+                        updateProject(project.id, { characters: newChar });
+                      }} />
                     </div>
                   ))}
                 </div>
@@ -327,8 +327,8 @@ export function Workspace() {
                     <div className="flex flex-col gap-4">
                       <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-1">Target Chapters</label>
-                        <input 
-                          type="number" 
+                        <input
+                          type="number"
                           min={1}
                           value={project.targetChapterCount || 10}
                           onChange={(e) => updateProject(project.id, { targetChapterCount: parseInt(e.target.value) || 10 })}
@@ -338,7 +338,7 @@ export function Workspace() {
                       </div>
                       <div>
                         <label className="block text-xs font-semibold text-slate-600 mb-1">Perspective (POV Type)</label>
-                        <select 
+                        <select
                           value={project.povType || 'Third Person Limited'}
                           onChange={(e) => updateProject(project.id, { povType: e.target.value })}
                           className="w-full px-3 py-2 border border-white/40 bg-white/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
@@ -351,7 +351,7 @@ export function Workspace() {
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">Structural Template (Optional)</label>
-                      <textarea 
+                      <textarea
                         value={project.outlineTemplate || ''}
                         onChange={(e) => updateProject(project.id, { outlineTemplate: e.target.value })}
                         placeholder="e.g., Save the Cat, Hero's Journey, Romancing the Beat... Paste your beat sheet here."
@@ -361,7 +361,7 @@ export function Workspace() {
                     </div>
                   </div>
                   <div className="flex justify-end">
-                    <button 
+                    <button
                       onClick={handleGenerateOutline}
                       disabled={loading === 'outline'}
                       className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
@@ -378,7 +378,7 @@ export function Workspace() {
             {project.outline.length > 0 && (
               <section className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
                 <div className="flex items-center gap-2 pb-2">
-                  <div className="w-6 h-6 rounded bg-amber-50 text-amber-500 flex items-center justify-center"><ListTree size={14}/></div>
+                  <div className="w-6 h-6 rounded bg-amber-50 text-amber-500 flex items-center justify-center"><ListTree size={14} /></div>
                   <h3 className="font-medium text-slate-900">4. Chapter Outline</h3>
                 </div>
                 <div className="border-l-2 border-white/40 ml-3 pl-5 space-y-6 relative">
@@ -389,7 +389,7 @@ export function Workspace() {
                         <h4 className="font-medium text-slate-900 text-sm">Ch {o.chapterNumber}: {o.title}</h4>
                         <div className="flex items-center gap-1 text-xs">
                           <span className="text-slate-500">POV:</span>
-                          <input 
+                          <input
                             className="font-medium text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded outline-none border border-transparent focus:border-indigo-300 w-24 text-center"
                             value={o.pov || ''}
                             placeholder="Character"
@@ -406,7 +406,7 @@ export function Workspace() {
                   ))}
                 </div>
                 <div className="flex justify-between items-center pt-4">
-                  <button 
+                  <button
                     onClick={handleContinueOutline}
                     disabled={loading === 'continue-outline'}
                     className="flex items-center gap-2 px-4 py-2 bg-white/40 hover:bg-white/60 border border-white/60 text-slate-800 shadow-sm text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
@@ -414,8 +414,8 @@ export function Workspace() {
                     {loading === 'continue-outline' ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
                     Add More Chapters
                   </button>
-                  
-                  <button 
+
+                  <button
                     onClick={() => setActiveTab('drafting')}
                     className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200 text-sm font-medium rounded-lg transition-colors"
                   >
@@ -431,7 +431,7 @@ export function Workspace() {
         {/* Drafting Tab */}
         {activeTab === 'drafting' && project.outline.length > 0 && (
           <div className="h-full flex gap-6">
-            
+
             {/* Outline List (Sidebar within Drafting) */}
             <div className="w-64 shrink-0 flex flex-col gap-2">
               <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Chapters</h3>
@@ -439,14 +439,13 @@ export function Workspace() {
                 const chapData = project.chapters.find(ch => ch.chapterNumber === c.chapterNumber);
                 const status = chapData?.status || 'pending';
                 const isSelected = selectedChapter === c.chapterNumber;
-                
+
                 return (
-                  <button 
+                  <button
                     key={c.chapterNumber}
                     onClick={() => setSelectedChapter(c.chapterNumber)}
-                    className={`text-left p-3 rounded-xl border text-sm transition-all ${
-                      isSelected ? 'bg-white/60 border-white/60 shadow-sm' : 'bg-white/20 border-transparent hover:bg-white/40 hover:border-white/40 text-slate-700'
-                    }`}
+                    className={`text-left p-3 rounded-xl border text-sm transition-all ${isSelected ? 'bg-white/60 border-white/60 shadow-sm' : 'bg-white/20 border-transparent hover:bg-white/40 hover:border-white/40 text-slate-700'
+                      }`}
                   >
                     <div className="flex justify-between items-center mb-1">
                       <span className="font-medium text-slate-900">Chapter {c.chapterNumber}</span>
@@ -465,7 +464,7 @@ export function Workspace() {
               {selectedChapter ? (() => {
                 const outDef = project.outline.find(o => o.chapterNumber === selectedChapter);
                 const data = project.chapters.find(ch => ch.chapterNumber === selectedChapter);
-                
+
                 return (
                   <>
                     <div className="p-4 border-b border-white/40 flex items-center gap-4 bg-white/20">
@@ -475,7 +474,7 @@ export function Workspace() {
                       </div>
                       <div className="flex items-center gap-2">
                         {data?.status === 'drafted' && data.content && (
-                          <button 
+                          <button
                             onClick={() => handleDownloadChapter(selectedChapter, outDef?.title || 'Draft', data.content)}
                             className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 bg-white/10 border border-white/40 shadow-sm hover:bg-white/30 text-slate-800 text-xs font-medium rounded-lg transition-colors"
                           >
@@ -483,7 +482,7 @@ export function Workspace() {
                             Download
                           </button>
                         )}
-                        <button 
+                        <button
                           onClick={() => handleGenerateChapter(selectedChapter)}
                           disabled={loading === `chapter-${selectedChapter}`}
                           className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 bg-white/10 border border-white/40 shadow-sm hover:bg-white/30 text-slate-800 text-xs font-medium rounded-lg disabled:opacity-50 transition-colors"
@@ -493,7 +492,7 @@ export function Workspace() {
                         </button>
                       </div>
                     </div>
-                    
+
                     <div className="flex-1 overflow-hidden p-6 relative group">
                       {loading === `chapter-${selectedChapter}` ? (
                         <div className="absolute inset-0 bg-white/40 backdrop-blur-sm flex flex-col items-center justify-center z-10">
@@ -501,13 +500,13 @@ export function Workspace() {
                           <p className="text-sm font-medium text-slate-700 animate-pulse">Generating Chapter {selectedChapter} via local inference...</p>
                         </div>
                       ) : null}
-                      
-                      <textarea 
+
+                      <textarea
                         value={data?.content || ''}
                         onChange={(e) => {
-                           updateProject(project.id, {
-                             chapters: project.chapters.map(c => c.chapterNumber === selectedChapter ? { ...c, content: e.target.value } : c)
-                           })
+                          updateProject(project.id, {
+                            chapters: project.chapters.map(c => c.chapterNumber === selectedChapter ? { ...c, content: e.target.value } : c)
+                          })
                         }}
                         placeholder="Chapter text will appear here..."
                         className="w-full h-full resize-none outline-none font-serif text-slate-800 text-lg leading-relaxed bg-transparent custom-scrollbar whitespace-pre-wrap"
@@ -521,14 +520,14 @@ export function Workspace() {
                 </div>
               )}
             </div>
-            
+
           </div>
         )}
-        
+
         {activeTab === 'drafting' && project.outline.length === 0 && (
           <div className="text-center py-20">
-             <p className="text-slate-600">Complete the Foundation steps to generate an outline before drafting.</p>
-             <button onClick={() => setActiveTab('foundation')} className="mt-4 text-sm text-indigo-600 font-medium hover:underline">Go to Foundation</button>
+            <p className="text-slate-600">Complete the Foundation steps to generate an outline before drafting.</p>
+            <button onClick={() => setActiveTab('foundation')} className="mt-4 text-sm text-indigo-600 font-medium hover:underline">Go to Foundation</button>
           </div>
         )}
 

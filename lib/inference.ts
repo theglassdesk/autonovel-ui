@@ -189,8 +189,17 @@ export async function generateChapter(
   
   let userPrompt = '';
 
+  let povInstruction = '';
   if (povType && chapterDef.pov) {
-    userPrompt += `--- NARRATIVE PERSPECTIVE ---\nYou MUST write this chapter in ${povType} from the perspective of ${chapterDef.pov}. We only know what ${chapterDef.pov} knows, sees, and feels.\n\n`;
+    povInstruction = `\nYou MUST write this chapter in ${povType} from the perspective of ${chapterDef.pov}. We only know what ${chapterDef.pov} knows, sees, and feels.\n\n`;
+  } else if (povType) {
+    povInstruction = `\nYou MUST write this chapter in ${povType}.\n\n`;
+  } else if (chapterDef.pov) {
+    povInstruction = `\nYou MUST write this chapter from the perspective of ${chapterDef.pov}. We only know what ${chapterDef.pov} knows, sees, and feels.\n\n`;
+  }
+
+  if (povInstruction) {
+    userPrompt += `--- NARRATIVE PERSPECTIVE ---${povInstruction}`;
   }
 
   if (guardrails) {

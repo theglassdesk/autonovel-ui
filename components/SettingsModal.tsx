@@ -181,8 +181,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               <textarea 
                 value={state.settings.systemPrompt}
                 onChange={(e) => updateSettings({ systemPrompt: e.target.value })}
-                rows={2}
-                className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none font-mono text-xs"
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-y font-mono text-xs"
               />
             </div>
           </div>
