@@ -2,10 +2,10 @@
 
 import React from 'react';
 import { useStore } from '@/lib/store';
-import { Settings, Plus, Book, ChevronRight, PenTool } from 'lucide-react';
+import { Settings, Plus, Book, ChevronRight, PenTool, Trash2 } from 'lucide-react';
 
 export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
-  const { state, setCurrentProject, createProject } = useStore();
+  const { state, setCurrentProject, createProject, deleteProject } = useStore();
 
   const handleNewProject = () => {
     const title = 'Untitled Novel';
@@ -26,18 +26,31 @@ export function AppSidebar({ onOpenSettings }: { onOpenSettings: () => void }) {
         <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Projects</h2>
         <div className="space-y-1">
           {state.projects.map(p => (
-            <button
-              key={p.id}
-              onClick={() => setCurrentProject(p.id)}
-              className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${
-                state.currentProjectId === p.id 
-                  ? 'bg-white/30 text-slate-900 shadow-sm' 
-                  : 'text-slate-600 hover:bg-white/20'
-              }`}
-            >
-              <Book size={14} className={state.currentProjectId === p.id ? 'text-indigo-600' : 'text-slate-500'} />
-              <span className="truncate">{p.title || 'Untitled'}</span>
-            </button>
+            <div key={p.id} className="group flex items-center gap-1 w-full">
+              <button
+                onClick={() => setCurrentProject(p.id)}
+                className={`flex-1 min-w-0 flex items-center gap-2 px-2 py-1.5 rounded-md text-sm transition-colors ${
+                  state.currentProjectId === p.id 
+                    ? 'bg-white/30 text-slate-900 shadow-sm' 
+                    : 'text-slate-600 hover:bg-white/20'
+                }`}
+              >
+                <Book size={14} className={state.currentProjectId === p.id ? 'text-indigo-600 shrink-0' : 'text-slate-500 shrink-0'} />
+                <span className="truncate text-left">{p.title || 'Untitled'}</span>
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (confirm('Are you sure? This can\'t be undone.')) {
+                    deleteProject(p.id);
+                  }
+                }}
+                className="p-1.5 text-slate-400/50 hover:text-red-500 hover:bg-white/30 rounded-md transition-all shrink-0"
+                title="Delete Novel"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
           ))}
         </div>
         
