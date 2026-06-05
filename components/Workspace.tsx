@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useStore } from '@/lib/store';
 import { generateSynopsis, generateCharacters, generateOutline, continueOutline, generateChapter, generateTitle } from '@/lib/inference';
-import { Loader2, Play, Check, ChevronRight, FileText, Users, ListTree, BookOpen, PenTool, Wand2, Download, Plus } from 'lucide-react';
+import { Loader2, Play, Check, ChevronRight, FileText, Users, ListTree, BookOpen, PenTool, Wand2, Download, Plus, Trash2 } from 'lucide-react';
 
 export function Workspace() {
   const { state, getCurrentProject, updateProject } = useStore();
@@ -45,7 +45,13 @@ export function Workspace() {
     try {
       const endpointURL = state.settings.provider === 'local' ? state.settings.apiUrl : '/api';
       const result = await generateCharacters(endpointURL, state.settings.model, state.settings.systemPrompt, project.synopsis, state.settings.provider);
-      updateProject(project.id, { characters: result });
+      const charactersWithIds = result.map((c: any) => ({
+        id: c.id || crypto.randomUUID(),
+        name: c.name || '',
+        role: c.role || '',
+        description: c.description || ''
+      }));
+      updateProject(project.id, { characters: charactersWithIds });
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -296,81 +302,173 @@ export function Workspace() {
             )}
 
             {/* Step 3: Characters */}
-            {project.characters.length > 0 && (
+            {project.synopsis && (
               <section className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded bg-emerald-50 text-emerald-500 flex items-center justify-center"><Users size={14} /></div>
-                  <h3 className="font-medium text-slate-900">3. Cast</h3>
-                </div>
-                <div className="grid grid-cols-1 gap-3">
-                  {project.characters.map((c, i) => (
-                    <div key={i} className="p-4 border border-white/40 rounded-lg bg-white/30 shadow-sm">
-                      <div className="flex justify-between items-start mb-1">
-                        <input className="font-semibold text-slate-900 bg-transparent outline-none w-1/3" value={c.name} onChange={(e) => {
-                          const newChar = [...project.characters];
-                          newChar[i].name = e.target.value;
-                          updateProject(project.id, { characters: newChar });
-                        }} />
-                        <span className="text-xs font-medium text-indigo-700 bg-indigo-100/80 px-2 py-0.5 rounded uppercase tracking-wider">{c.role}</span>
-                      </div>
-                      <textarea className="text-sm text-slate-700 bg-transparent w-full resize-none h-16 outline-none mt-2" value={c.description} onChange={(e) => {
-                        const newChar = [...project.characters];
-                        newChar[i].description = e.target.value;
-                        updateProject(project.id, { characters: newChar });
-                      }} />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded bg-emerald-50 text-emerald-500 flex items-center justify-center">
+                      <Users size={14} />
                     </div>
-                  ))}
-                </div>
-                <div className="mt-6 pt-4 border-t border-white/20">
-                  <h4 className="font-medium text-slate-900 text-sm mb-2">Outline Configuration</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div className="flex flex-col gap-4">
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1">Target Chapters</label>
-                        <input
-                          type="number"
-                          min={1}
-                          value={project.targetChapterCount || 10}
-                          onChange={(e) => updateProject(project.id, { targetChapterCount: parseInt(e.target.value) || 10 })}
-                          className="w-full px-3 py-2 border border-white/40 bg-white/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                        />
-                        <p className="text-[10px] text-slate-500 mt-1">How many chapters to outline in total.</p>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1">Perspective (POV Type)</label>
-                        <select
-                          value={project.povType || 'Third Person Limited'}
-                          onChange={(e) => updateProject(project.id, { povType: e.target.value })}
-                          className="w-full px-3 py-2 border border-white/40 bg-white/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                        >
-                          <option value="First Person (I/me)">First Person (I/me)</option>
-                          <option value="Third Person Limited (he/she)">Third Person Limited (he/she)</option>
-                          <option value="Third Person Omniscient">Third Person Omniscient</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">Structural Template (Optional)</label>
-                      <textarea
-                        value={project.outlineTemplate || ''}
-                        onChange={(e) => updateProject(project.id, { outlineTemplate: e.target.value })}
-                        placeholder="e.g., Save the Cat, Hero's Journey, Romancing the Beat... Paste your beat sheet here."
-                        className="w-full px-3 py-2 border border-white/40 bg-white/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 h-24 resize-none"
-                      />
-                      <p className="text-[10px] text-slate-500 mt-1">If provided, the AI will map the chapters to these beats.</p>
-                    </div>
+                    <h3 className="font-medium text-slate-900">3. Cast</h3>
                   </div>
-                  <div className="flex justify-end">
+                  {project.characters.length > 0 && (
                     <button
-                      onClick={handleGenerateOutline}
-                      disabled={loading === 'outline'}
-                      className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
+                      onClick={() => {
+                        const newChar = [
+                          ...project.characters,
+                          { id: crypto.randomUUID(), name: '', role: 'Supporting', description: '' }
+                        ];
+                        updateProject(project.id, { characters: newChar });
+                      }}
+                      className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-700 transition-colors px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 rounded-lg"
                     >
-                      {loading === 'outline' ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
-                      Generate Outline
+                      <Plus size={14} /> Add Character
                     </button>
-                  </div>
+                  )}
                 </div>
+
+                {project.characters.length === 0 ? (
+                  <div className="p-8 border border-dashed border-white/60 rounded-xl bg-white/10 text-center">
+                    <Users className="mx-auto h-8 w-8 text-slate-400 mb-2 opacity-50" />
+                    <p className="text-xs text-slate-600 mb-4">No characters defined for this novel yet.</p>
+                    <div className="flex justify-center gap-3">
+                      <button
+                        onClick={handleGenerateCharacters}
+                        disabled={loading === 'characters'}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg disabled:opacity-50 transition-colors shadow-sm"
+                      >
+                        {loading === 'characters' ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+                        Generate from Synopsis
+                      </button>
+                      <button
+                        onClick={() => {
+                          updateProject(project.id, {
+                            characters: [{ id: crypto.randomUUID(), name: '', role: 'Protagonist', description: '' }]
+                          });
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white/50 hover:bg-white/80 border border-white/60 text-slate-800 text-xs font-medium rounded-lg transition-colors shadow-sm"
+                      >
+                        <Plus size={12} /> Add Manually
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 gap-3">
+                      {project.characters.map((c, i) => (
+                        <div key={c.id || i} className="p-4 border border-white/40 rounded-lg bg-white/30 shadow-sm transition-all hover:bg-white/40">
+                          <div className="flex justify-between items-center mb-1 gap-4">
+                            <input
+                              className="font-semibold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-500 outline-none w-1/2 px-1 py-0.5 rounded transition-colors"
+                              value={c.name}
+                              placeholder="Character Name"
+                              onChange={(e) => {
+                                const newChar = [...project.characters];
+                                newChar[i] = { ...newChar[i], name: e.target.value };
+                                updateProject(project.id, { characters: newChar });
+                              }}
+                            />
+                            <div className="flex items-center gap-2">
+                              <input
+                                className="text-xs font-medium text-indigo-700 bg-indigo-100/80 px-2.5 py-1 rounded uppercase tracking-wider outline-none border border-transparent focus:border-indigo-300 w-28 text-center transition-colors placeholder:text-indigo-400 font-sans"
+                                value={c.role}
+                                placeholder="ROLE"
+                                onChange={(e) => {
+                                  const newChar = [...project.characters];
+                                  newChar[i] = { ...newChar[i], role: e.target.value };
+                                  updateProject(project.id, { characters: newChar });
+                                }}
+                              />
+                              <button
+                                onClick={() => {
+                                  const newChar = project.characters.filter((_, idx) => idx !== i);
+                                  updateProject(project.id, { characters: newChar });
+                                }}
+                                className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                                title="Delete Character"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                          <textarea
+                            className="text-sm text-slate-700 bg-transparent w-full resize-none h-16 outline-none mt-2 border border-transparent hover:border-slate-200 focus:border-indigo-500/30 focus:bg-white/20 p-1 rounded transition-all"
+                            value={c.description}
+                            placeholder="Character description, background, and traits..."
+                            onChange={(e) => {
+                              const newChar = [...project.characters];
+                              newChar[i] = { ...newChar[i], description: e.target.value };
+                              updateProject(project.id, { characters: newChar });
+                            }}
+                          />
+                        </div>
+                      ))}
+                      <button
+                        onClick={() => {
+                          const newChar = [
+                            ...project.characters,
+                            { id: crypto.randomUUID(), name: '', role: 'Supporting', description: '' }
+                          ];
+                          updateProject(project.id, { characters: newChar });
+                        }}
+                        className="flex items-center justify-center gap-2 p-3 border border-dashed border-white/60 rounded-lg hover:bg-white/30 text-slate-600 hover:text-slate-900 text-sm font-medium transition-all mt-2"
+                      >
+                        <Plus size={16} /> Add Another Character
+                      </button>
+                    </div>
+
+                    <div className="mt-6 pt-4 border-t border-white/20">
+                      <h4 className="font-medium text-slate-900 text-sm mb-2">Outline Configuration</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div className="flex flex-col gap-4">
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1">Target Chapters</label>
+                            <input
+                              type="number"
+                              min={1}
+                              value={project.targetChapterCount || 10}
+                              onChange={(e) => updateProject(project.id, { targetChapterCount: parseInt(e.target.value) || 10 })}
+                              className="w-full px-3 py-2 border border-white/40 bg-white/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                            />
+                            <p className="text-[10px] text-slate-500 mt-1">How many chapters to outline in total.</p>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-600 mb-1">Perspective (POV Type)</label>
+                            <select
+                              value={project.povType || 'Third Person Limited'}
+                              onChange={(e) => updateProject(project.id, { povType: e.target.value })}
+                              className="w-full px-3 py-2 border border-white/40 bg-white/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                            >
+                              <option value="First Person (I/me)">First Person (I/me)</option>
+                              <option value="Third Person Limited (he/she)">Third Person Limited (he/she)</option>
+                              <option value="Third Person Omniscient">Third Person Omniscient</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-600 mb-1">Structural Template (Optional)</label>
+                          <textarea
+                            value={project.outlineTemplate || ''}
+                            onChange={(e) => updateProject(project.id, { outlineTemplate: e.target.value })}
+                            placeholder="e.g., Save the Cat, Hero's Journey, Romancing the Beat... Paste your beat sheet here."
+                            className="w-full px-3 py-2 border border-white/40 bg-white/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 h-24 resize-none"
+                          />
+                          <p className="text-[10px] text-slate-500 mt-1">If provided, the AI will map the chapters to these beats.</p>
+                        </div>
+                      </div>
+                      <div className="flex justify-end">
+                        <button
+                          onClick={handleGenerateOutline}
+                          disabled={loading === 'outline'}
+                          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
+                        >
+                          {loading === 'outline' ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
+                          Generate Outline
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </section>
             )}
 
