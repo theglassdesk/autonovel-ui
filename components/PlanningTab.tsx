@@ -31,7 +31,8 @@ export function PlanningTab() {
         return [
           { id: 'openai/gpt-4o', label: 'GPT-4o' },
           { id: 'google/gemma-4-31b-it:free', label: 'Gemma 4' },
-          { id: 'openai/gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
+          { id: 'x-ai/grok-4.3', label: 'Grok 4.3' },
+          { id: 'deepseek/deepseek-v4-pro', label: 'Deepseek V4 Pro' },
           { id: 'meta-llama/llama-3-70b-instruct', label: 'Llama 3 70B' },
         ];
       case 'local':
