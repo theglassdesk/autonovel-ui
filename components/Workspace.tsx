@@ -232,16 +232,16 @@ export function Workspace() {
               Foundation
             </button>
             <button
-              onClick={() => setActiveTab('planning')}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === 'planning' ? 'bg-white/60 shadow-sm text-slate-900' : 'text-slate-600 hover:text-slate-900 hover:bg-white/20'}`}
-            >
-              Planning
-            </button>
-            <button
               onClick={() => setActiveTab('drafting')}
               className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === 'drafting' ? 'bg-white/60 shadow-sm text-slate-900' : 'text-slate-600 hover:text-slate-900 hover:bg-white/20'}`}
             >
               Drafting
+            </button>
+            <button
+              onClick={() => setActiveTab('planning')}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === 'planning' ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-sm' : 'text-violet-600 hover:text-violet-900 hover:bg-violet-100/30'}`}
+            >
+              Planning
             </button>
           </div>
         </div>

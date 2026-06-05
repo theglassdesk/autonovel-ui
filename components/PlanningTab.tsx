@@ -78,6 +78,17 @@ export function PlanningTab() {
           if (project.outline && project.outline.length > 0) {
             systemPrompt += `\nOutline: ${JSON.stringify(project.outline)}`;
           }
+          if (project.chapters && project.chapters.length > 0) {
+            const draftedChapters = project.chapters.filter(c => c.status === 'drafted' && c.content);
+            if (draftedChapters.length > 0) {
+              systemPrompt += `\n\nDrafted Chapters:\n`;
+              draftedChapters.forEach(ch => {
+                const outlineItem = project.outline.find(o => o.chapterNumber === ch.chapterNumber);
+                const title = outlineItem ? outlineItem.title : `Chapter ${ch.chapterNumber}`;
+                systemPrompt += `\n--- ${title} ---\n${ch.content}\n`;
+              });
+            }
+          }
         }
       }
 
