@@ -126,7 +126,9 @@ export function Workspace() {
         antiPatterns: state.settings.antiPatterns,
       };
       const currentChapter = project.chapters.find(c => c.chapterNumber === chapNum);
-      const existingContent = currentChapter?.content || undefined;
+      // We explicitly pass undefined for existingContent so the model generates a fresh chapter 
+      // instead of attempting to rewrite the existing one.
+      const existingContent = undefined;
 
       let previousChapterData = undefined;
       if (chapNum > 1) {
@@ -618,7 +620,7 @@ export function Workspace() {
                           className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 bg-white/10 border border-white/40 shadow-sm hover:bg-white/30 text-slate-800 text-xs font-medium rounded-lg disabled:opacity-50 transition-colors"
                         >
                           {loading === `chapter-${selectedChapter}` ? <Loader2 size={14} className="animate-spin" /> : <PenTool size={14} className="text-indigo-500" />}
-                          {data?.status === 'pending' ? 'Write Chapter' : 'Rewrite'}
+                          Write Chapter
                         </button>
                       </div>
                     </div>
