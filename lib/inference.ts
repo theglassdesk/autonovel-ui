@@ -96,9 +96,13 @@ function parseJSONWithRepair(text: string) {
   }
 }
 
+const PLANNING_SYSTEM_PROMPT = `You are an expert fiction planning agent and structural editor. Your job is to help plan, structure, and package commercial fiction. You specialize in genres with strong reader expectations, specifically dark romance, psychological thrillers, and small town contemporary romance/western romance.`;
+
+const TITLE_SYSTEM_PROMPT = `You are an expert fiction planning agent and structural editor. Your job is to help plan, structure, and package commercial fiction. You specialize in genres with strong reader expectations, specifically dark romance, psychological thrillers, and small town contemporary romance/western romance. When you create the book title, you must match the conventions of the requested genre. A small town romance title needs a cozy, community focused feel. A dark romance or thriller requires an intense or ominous tone. Keep titles memorable and under five words.`;
+
 export async function generateSynopsis(apiUrl: string, model: string, systemPrompt: string, title: string, premise: string, provider?: string) {
   const messages: Message[] = [
-    { role: 'system', content: systemPrompt },
+    { role: 'system', content: PLANNING_SYSTEM_PROMPT },
     { role: 'user', content: `Write a detailed 2-3 paragraph synopsis for a novel titled "${title}".\n\nPremise: ${premise}\n\nDo not include any pleasantries, just the synopsis text.` }
   ];
   return generateChatCompletion(apiUrl, model, messages, 0.8, 1500, provider);
@@ -106,7 +110,7 @@ export async function generateSynopsis(apiUrl: string, model: string, systemProm
 
 export async function generateTitle(apiUrl: string, model: string, systemPrompt: string, synopsis: string, provider?: string) {
   const messages: Message[] = [
-    { role: 'system', content: systemPrompt },
+    { role: 'system', content: TITLE_SYSTEM_PROMPT },
     { role: 'user', content: `Based on the following synopsis, suggest a single, compelling title for the novel. Return ONLY the title text, nothing else. No quotes.\n\nSynopsis:\n${synopsis}` }
   ];
   const response = await generateChatCompletion(apiUrl, model, messages, 0.7, 50, provider);
@@ -115,7 +119,7 @@ export async function generateTitle(apiUrl: string, model: string, systemPrompt:
 
 export async function generateCharacters(apiUrl: string, model: string, systemPrompt: string, synopsis: string, provider?: string) {
   const messages: Message[] = [
-    { role: 'system', content: systemPrompt },
+    { role: 'system', content: PLANNING_SYSTEM_PROMPT },
     { role: 'user', content: `Based on the following synopsis, create a list of 3-5 main characters.\n\nSynopsis:\n${synopsis}\n\nFormat your response EXACTLY as a JSON array of objects with keys: "name", "role", and "description". Do not include Markdown blocks like \`\`\`json, just return the raw array.` }
   ];
   const response = await generateChatCompletion(apiUrl, model, messages, 0.7, 1000, provider);
@@ -134,7 +138,7 @@ export async function generateOutline(apiUrl: string, model: string, systemPromp
   }
 
   const messages: Message[] = [
-    { role: 'system', content: systemPrompt },
+    { role: 'system', content: PLANNING_SYSTEM_PROMPT },
     { role: 'user', content: `Given the synopsis and characters, outline the chapters for the novel. You MUST generate exactly ${targetChapterCount} chapters.\n\nSynopsis:\n${synopsis}\n\nCharacters:\n${JSON.stringify(characters)}${templateInstruction}\n\nFormat your response EXACTLY as a JSON array of objects with keys: "chapterNumber" (number), "title" (string), "summary" (string), "pov" (string - the name of the character whose perspective the chapter is from). Just the raw array, no markdown blocks.` }
   ];
   // passing -1 or high token limit if possible, or just omitting to let local model use max
@@ -156,7 +160,7 @@ export async function continueOutline(apiUrl: string, model: string, systemPromp
   }
 
   const messages: Message[] = [
-    { role: 'system', content: systemPrompt },
+    { role: 'system', content: PLANNING_SYSTEM_PROMPT },
     { role: 'user', content: `Given the synopsis and characters, continue outlining the chapters for the novel starting from Chapter ${lastChapter + 1}. Aim for 5-10 MORE chapters.\n\nSynopsis:\n${synopsis}\n\nCharacters:\n${JSON.stringify(characters)}${templateInstruction}\n\nExisting Outline (Chapters 1 to ${lastChapter}):\n${JSON.stringify(currentOutline)}\n\nFormat your response EXACTLY as a JSON array of objects with keys: "chapterNumber" (number), "title" (string), "summary" (string), "pov" (string - the name of the character whose perspective the chapter is from). Just the raw array, no markdown blocks.` }
   ];
   const response = await generateChatCompletion(apiUrl, model, messages, 0.7, undefined, provider);
