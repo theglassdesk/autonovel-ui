@@ -10,7 +10,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const handleExport = () => {
     const dateStr = new Date().toISOString().split('T')[0];
     const title = `autonovel_backup_${dateStr}`;
-    
+
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -54,12 +54,12 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             <X size={16} />
           </button>
         </div>
-        
+
         <div className="p-4 space-y-6 overflow-y-auto custom-scrollbar flex-1">
           {/* Section: Data Management */}
           <div className="space-y-4">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-gray-100 pb-2">Data Management</h3>
-            
+
             <div className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg">
               <div>
                 <h3 className="text-sm font-medium text-gray-800">Auto-save to Local Disk</h3>
@@ -72,7 +72,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             </div>
 
             <div className="flex items-center gap-3">
-              <button 
+              <button
                 onClick={handleExport}
                 className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 shadow-sm hover:bg-gray-50 text-gray-700 text-xs font-medium rounded-md transition-colors"
               >
@@ -88,20 +88,20 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           {/* Section: Inference */}
           <div className="space-y-4">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-gray-100 pb-2">Inference Engine</h3>
-            
+
             <div className="space-y-3 p-3 bg-white border border-gray-200 rounded-lg">
               <div>
                 <label className="block text-xs font-semibold text-gray-800 mb-1">AI Provider</label>
-                <select 
+                <select
                   value={state.settings.provider}
                   onChange={(e) => {
                     const newProvider = e.target.value as AppState['settings']['provider'];
                     let defaultModel = state.settings.model;
                     if (newProvider === 'gemini') defaultModel = 'gemini-2.5-flash';
                     if (newProvider === 'anthropic') defaultModel = 'claude-3-5-sonnet-20241022';
-                    if (newProvider === 'openrouter') defaultModel = 'openai/gpt-4o';
+                    if (newProvider === 'openrouter') defaultModel = 'google/gemma-4-31b-it:free';
                     if (newProvider === 'local') defaultModel = 'local-model';
-                    
+
                     updateSettings({ provider: newProvider, model: defaultModel });
                   }}
                   className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
@@ -117,8 +117,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               {state.settings.provider === 'local' && (
                 <div className="pt-2 border-t border-gray-100">
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Local Inference API URL</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={state.settings.apiUrl}
                     onChange={(e) => updateSettings({ apiUrl: e.target.value })}
                     placeholder="http://127.0.0.1:1234/v1"
@@ -128,11 +128,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 </div>
               )}
             </div>
-            
+
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Model Name</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 list="model-suggestions"
                 value={state.settings.model}
                 onChange={(e) => updateSettings({ model: e.target.value })}
@@ -173,10 +173,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 )}
               </datalist>
             </div>
-            
+
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Base System Prompt</label>
-              <textarea 
+              <textarea
                 value={state.settings.systemPrompt}
                 onChange={(e) => updateSettings({ systemPrompt: e.target.value })}
                 rows={3}
@@ -189,10 +189,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           <div className="space-y-4">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-gray-100 pb-2">Writing Guardrails</h3>
             <p className="text-xs text-gray-500 mb-2">These act as the &quot;immune system&quot; during drafting, preventing the model from sounding like AI slop.</p>
-            
+
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">1. CRAFT.md Rules</label>
-              <textarea 
+              <textarea
                 value={state.settings.craftRules}
                 onChange={(e) => updateSettings({ craftRules: e.target.value })}
                 rows={3}
@@ -203,7 +203,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">2. ANTI-SLOP.md (Banned Words)</label>
-              <textarea 
+              <textarea
                 value={state.settings.antiSlop}
                 onChange={(e) => updateSettings({ antiSlop: e.target.value })}
                 rows={4}
@@ -214,7 +214,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">3. ANTI-PATTERNS.md (Structural Bans)</label>
-              <textarea 
+              <textarea
                 value={state.settings.antiPatterns}
                 onChange={(e) => updateSettings({ antiPatterns: e.target.value })}
                 rows={4}
@@ -225,7 +225,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           </div>
 
         </div>
-        
+
         <div className="px-4 py-3 border-t border-gray-100 bg-gray-50 flex justify-end shrink-0">
           <button
             onClick={onClose}

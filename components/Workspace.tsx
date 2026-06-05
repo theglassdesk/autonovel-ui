@@ -127,7 +127,32 @@ export function Workspace() {
       };
       const currentChapter = project.chapters.find(c => c.chapterNumber === chapNum);
       const existingContent = currentChapter?.content || undefined;
-      const result = await generateChapter(endpointURL, state.settings.model, state.settings.systemPrompt, project.synopsis, project.outline, chapNum, state.settings.provider, guardrails, existingContent, project.povType || 'First Person (I/me)');
+
+      let previousChapterData = undefined;
+      if (chapNum > 1) {
+        const prevOutline = project.outline.find(o => o.chapterNumber === chapNum - 1);
+        const prevChapter = project.chapters.find(c => c.chapterNumber === chapNum - 1);
+        previousChapterData = {
+          title: prevOutline?.title,
+          summary: prevOutline?.summary,
+          content: prevChapter?.content
+        };
+      }
+
+      const result = await generateChapter(
+        endpointURL, 
+        state.settings.model, 
+        state.settings.systemPrompt, 
+        project.synopsis, 
+        project.outline, 
+        chapNum, 
+        state.settings.provider, 
+        guardrails, 
+        existingContent, 
+        project.povType || 'First Person (I/me)',
+        project.characters,
+        previousChapterData
+      );
       updateProject(project.id, {
         chapters: project.chapters.map(c => c.chapterNumber === chapNum ? { ...c, content: result, status: 'drafted' } : c)
       });
