@@ -182,7 +182,9 @@ export async function generateChapter(
   provider?: string, 
   guardrails?: { craft: string; antiSlop: string; antiPatterns: string },
   existingContent?: string,
-  povType?: string
+  povType?: string,
+  characters?: any[],
+  previousChapterData?: { title?: string; summary?: string; content?: string }
 ) {
   const chapterDef = outline.find(c => c.chapterNumber === chapterNumber);
   if (!chapterDef) throw new Error("Chapter not found in outline");
@@ -200,6 +202,21 @@ export async function generateChapter(
 
   if (povInstruction) {
     userPrompt += `--- NARRATIVE PERSPECTIVE ---${povInstruction}`;
+  }
+
+  if (characters && characters.length > 0) {
+    userPrompt += `\n--- CHARACTER PROFILES ---\n${JSON.stringify(characters, null, 2)}\n\n`;
+  }
+
+  if (previousChapterData) {
+    userPrompt += `--- PREVIOUS CHAPTER CONTEXT (For reference to avoid repetition) ---\n`;
+    if (previousChapterData.title) userPrompt += `Chapter ${chapterNumber - 1}: ${previousChapterData.title}\n`;
+    if (previousChapterData.summary) userPrompt += `Summary: ${previousChapterData.summary}\n`;
+    if (previousChapterData.content) {
+      const prevContent = previousChapterData.content.slice(-3000);
+      userPrompt += `Ending text: ...\n${prevContent}\n`;
+    }
+    userPrompt += `\n`;
   }
 
   if (guardrails) {
