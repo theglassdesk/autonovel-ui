@@ -572,12 +572,12 @@ export function Workspace() {
 
                 return (
                   <>
-                    <div className="p-4 border-b border-white/40 flex items-center gap-4 bg-white/20">
+                    <div className="p-4 border-b border-white/40 flex items-start gap-4 bg-white/20">
                       <div className="min-w-0 flex-1">
                         <h2 className="font-medium text-slate-900 truncate">Chapter {selectedChapter}: {outDef?.title}</h2>
-                        <p className="text-xs text-slate-600 mt-1 truncate">{outDef?.summary}</p>
+                        <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">{outDef?.summary}</p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 pt-0.5">
                         {data?.status === 'drafted' && data.content && (
                           <button
                             onClick={() => handleDownloadChapter(selectedChapter, outDef?.title || 'Draft', data.content)}

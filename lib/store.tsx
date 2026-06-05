@@ -42,6 +42,7 @@ export type AppState = {
   projects: NovelProject[];
   currentProjectId: string | null;
   planningChat?: { role: 'user' | 'assistant'; content: string }[];
+  planningChatConfig?: { projectId: string; modelId: string };
   settings: {
     provider: 'local' | 'gemini' | 'anthropic' | 'openrouter';
     apiUrl: string;
@@ -62,6 +63,7 @@ type StoreContextType = {
   updateProject: (id: string, updates: Partial<NovelProject>) => void;
   updateSettings: (updates: Partial<AppState['settings']>) => void;
   updatePlanningChat: (messages: { role: 'user' | 'assistant'; content: string }[]) => void;
+  updatePlanningChatConfig: (config: { projectId: string; modelId: string } | undefined) => void;
   getCurrentProject: () => NovelProject | undefined;
   importState: (newState: AppState) => void;
 };
@@ -191,6 +193,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }));
   };
 
+  const updatePlanningChatConfig = (config: { projectId: string; modelId: string } | undefined) => {
+    setState(prev => ({
+      ...prev,
+      planningChatConfig: config
+    }));
+  };
+
   const getCurrentProject = () => {
     return state.projects.find(p => p.id === state.currentProjectId);
   };
@@ -202,7 +211,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   if (!isLoaded) return null; // Prevent hydration mismatch
 
   return (
-    <StoreContext.Provider value={{ state, createProject, deleteProject, setCurrentProject, updateProject, updateSettings, updatePlanningChat, getCurrentProject, importState }}>
+    <StoreContext.Provider value={{ state, createProject, deleteProject, setCurrentProject, updateProject, updateSettings, updatePlanningChat, updatePlanningChatConfig, getCurrentProject, importState }}>
       {children}
     </StoreContext.Provider>
   );
