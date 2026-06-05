@@ -8,10 +8,8 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   const { state, updateSettings, importState, getCurrentProject } = useStore();
 
   const handleExport = () => {
-    const project = getCurrentProject();
-    const title = project?.title && project.title !== 'Untitled Project' 
-      ? project.title.replace(/[^a-z0-9]/gi, '_').toLowerCase() 
-      : 'autonovel_backup';
+    const dateStr = new Date().toISOString().split('T')[0];
+    const title = `autonovel_backup_${dateStr}`;
     
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
