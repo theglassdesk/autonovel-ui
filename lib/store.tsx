@@ -41,6 +41,7 @@ export type NovelProject = {
 export type AppState = {
   projects: NovelProject[];
   currentProjectId: string | null;
+  planningChat?: { role: 'user' | 'assistant'; content: string }[];
   settings: {
     provider: 'local' | 'gemini' | 'anthropic' | 'openrouter';
     apiUrl: string;
@@ -60,6 +61,7 @@ type StoreContextType = {
   setCurrentProject: (id: string) => void;
   updateProject: (id: string, updates: Partial<NovelProject>) => void;
   updateSettings: (updates: Partial<AppState['settings']>) => void;
+  updatePlanningChat: (messages: { role: 'user' | 'assistant'; content: string }[]) => void;
   getCurrentProject: () => NovelProject | undefined;
   importState: (newState: AppState) => void;
 };
@@ -78,7 +80,7 @@ const defaultSettings = {
 const StoreContext = createContext<StoreContextType | null>(null);
 
 function loadState(): AppState {
-  if (typeof window === 'undefined') return { projects: [], currentProjectId: null, settings: defaultSettings };
+  if (typeof window === 'undefined') return { projects: [], currentProjectId: null, planningChat: [], settings: defaultSettings };
   try {
     const saved = localStorage.getItem('autonovel_state');
     if (saved) {
@@ -97,18 +99,20 @@ function loadState(): AppState {
         if (typeof parsed.settings.antiPatterns === 'undefined') parsed.settings.antiPatterns = defaultSettings.antiPatterns;
         if (typeof parsed.settings.autoSaveToDisk === 'undefined') parsed.settings.autoSaveToDisk = defaultSettings.autoSaveToDisk;
       }
+      if (!parsed.planningChat) parsed.planningChat = [];
       return parsed;
     }
   } catch (e) {
     console.error('Failed to load state', e);
   }
-  return { projects: [], currentProjectId: null, settings: defaultSettings };
+  return { projects: [], currentProjectId: null, planningChat: [], settings: defaultSettings };
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>({
     projects: [],
     currentProjectId: null,
+    planningChat: [],
     settings: defaultSettings,
   });
   
@@ -180,6 +184,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }));
   };
 
+  const updatePlanningChat = (messages: { role: 'user' | 'assistant'; content: string }[]) => {
+    setState(prev => ({
+      ...prev,
+      planningChat: messages
+    }));
+  };
+
   const getCurrentProject = () => {
     return state.projects.find(p => p.id === state.currentProjectId);
   };
@@ -191,7 +202,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   if (!isLoaded) return null; // Prevent hydration mismatch
 
   return (
-    <StoreContext.Provider value={{ state, createProject, deleteProject, setCurrentProject, updateProject, updateSettings, getCurrentProject, importState }}>
+    <StoreContext.Provider value={{ state, createProject, deleteProject, setCurrentProject, updateProject, updateSettings, updatePlanningChat, getCurrentProject, importState }}>
       {children}
     </StoreContext.Provider>
   );

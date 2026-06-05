@@ -4,12 +4,13 @@ import React, { useState } from 'react';
 import { useStore } from '@/lib/store';
 import { generateSynopsis, generateCharacters, generateOutline, continueOutline, generateChapter, generateTitle } from '@/lib/inference';
 import { Loader2, Play, Check, ChevronRight, FileText, Users, ListTree, BookOpen, PenTool, Wand2, Download, Plus, Trash2 } from 'lucide-react';
+import { PlanningTab } from './PlanningTab';
 
 export function Workspace() {
   const { state, getCurrentProject, updateProject } = useStore();
   const project = getCurrentProject();
   const [loading, setLoading] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'foundation' | 'drafting'>('foundation');
+  const [activeTab, setActiveTab] = useState<'foundation' | 'drafting' | 'planning'>('foundation');
   const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -229,6 +230,12 @@ export function Workspace() {
               className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === 'foundation' ? 'bg-white/60 shadow-sm text-slate-900' : 'text-slate-600 hover:text-slate-900 hover:bg-white/20'}`}
             >
               Foundation
+            </button>
+            <button
+              onClick={() => setActiveTab('planning')}
+              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === 'planning' ? 'bg-white/60 shadow-sm text-slate-900' : 'text-slate-600 hover:text-slate-900 hover:bg-white/20'}`}
+            >
+              Planning
             </button>
             <button
               onClick={() => setActiveTab('drafting')}
@@ -626,6 +633,13 @@ export function Workspace() {
           <div className="text-center py-20">
             <p className="text-slate-600">Complete the Foundation steps to generate an outline before drafting.</p>
             <button onClick={() => setActiveTab('foundation')} className="mt-4 text-sm text-indigo-600 font-medium hover:underline">Go to Foundation</button>
+          </div>
+        )}
+
+        {/* Planning Tab */}
+        {activeTab === 'planning' && (
+          <div className="h-full">
+            <PlanningTab />
           </div>
         )}
 
