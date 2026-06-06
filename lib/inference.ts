@@ -219,6 +219,14 @@ export async function generateChapter(
     userPrompt += `\n`;
   }
 
+  const nextChapterDef = outline.find(c => c.chapterNumber === chapterNumber + 1);
+  if (nextChapterDef) {
+    userPrompt += `--- NEXT CHAPTER PREVIEW (DO NOT WRITE THESE EVENTS) ---\n`;
+    userPrompt += `Chapter ${chapterNumber + 1}: "${nextChapterDef.title}"\n`;
+    userPrompt += `Summary: ${nextChapterDef.summary}\n`;
+    userPrompt += `CRITICAL BOUNDARY: Do NOT progress the story into the events of the next chapter. Stop the narrative immediately before these events begin.\n\n`;
+  }
+
   if (guardrails) {
     userPrompt += `--- CRITICAL WRITING GUARDRAILS ---\nYou MUST strictly adhere to the following rules while writing this chapter:\n\nCRAFT GUIDELINES:\n${guardrails.craft}\n\nBANNED WORDS (DO NOT USE THESE WORDS/PHRASES):\n${guardrails.antiSlop}\n\nANTI-PATTERNS (AVOID THESE STRUCTURES):\n${guardrails.antiPatterns}\n\n---------------------------------------\n\n`;
   }
