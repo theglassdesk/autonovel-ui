@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useStore } from '@/lib/store';
 import { generateSynopsis, generateCharacters, generateOutline, continueOutline, generateChapter, generateTitle } from '@/lib/inference';
-import { Loader2, Play, Check, ChevronRight, FileText, Users, ListTree, BookOpen, PenTool, Wand2, Download, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Play, Check, ChevronRight, FileText, Users, ListTree, BookOpen, PenTool, Wand2, Download, Plus, Trash2, MessageSquare, Layers } from 'lucide-react';
 import { PlanningTab } from './PlanningTab';
 
 export function Workspace() {
@@ -142,15 +142,15 @@ export function Workspace() {
       }
 
       const result = await generateChapter(
-        endpointURL, 
-        state.settings.model, 
-        state.settings.systemPrompt, 
-        project.synopsis, 
-        project.outline, 
-        chapNum, 
-        state.settings.provider, 
-        guardrails, 
-        existingContent, 
+        endpointURL,
+        state.settings.model,
+        state.settings.systemPrompt,
+        project.synopsis,
+        project.outline,
+        chapNum,
+        state.settings.provider,
+        guardrails,
+        existingContent,
         project.povType || 'First Person (I/me)',
         project.characters,
         previousChapterData
@@ -248,27 +248,27 @@ export function Workspace() {
               className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500 text-white hover:bg-indigo-600 text-xs font-medium rounded-lg transition-colors shadow-sm"
               title="Download Full Draft"
             >
-              <Download size={14} /> Download Draft
+              <Download size={14} /> Download Full Draft
             </button>
           )}
           <div className="flex items-center gap-1 bg-white/20 p-1 rounded-lg border border-white/20">
             <button
               onClick={() => setActiveTab('foundation')}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === 'foundation' ? 'bg-white/60 shadow-sm text-slate-900' : 'text-slate-600 hover:text-slate-900 hover:bg-white/20'}`}
+              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === 'foundation' ? 'bg-white/60 shadow-sm text-slate-900' : 'text-slate-600 hover:text-slate-900 hover:bg-white/20'}`}
             >
-              Foundation
+              <Layers size={14} /> Foundation
             </button>
             <button
               onClick={() => setActiveTab('drafting')}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === 'drafting' ? 'bg-white/60 shadow-sm text-slate-900' : 'text-slate-600 hover:text-slate-900 hover:bg-white/20'}`}
+              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === 'drafting' ? 'bg-white/60 shadow-sm text-slate-900' : 'text-slate-600 hover:text-slate-900 hover:bg-white/20'}`}
             >
-              Drafting
+              <PenTool size={14} /> Drafting
             </button>
             <button
               onClick={() => setActiveTab('planning')}
-              className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === 'planning' ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-sm' : 'text-violet-600 hover:text-violet-900 hover:bg-violet-100/30'}`}
+              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === 'planning' ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-sm' : 'text-violet-600 hover:text-violet-900 hover:bg-violet-100/30'}`}
             >
-              Planning
+              <MessageSquare size={14} /> Planning
             </button>
           </div>
         </div>
@@ -517,9 +517,21 @@ export function Workspace() {
                   {project.outline.map((o, i) => (
                     <div key={i} className="relative">
                       <div className="absolute -left-[27px] top-1 w-3 h-3 rounded-full bg-white border-2 border-indigo-400"></div>
-                      <div className="flex justify-between items-start mb-1">
-                        <h4 className="font-medium text-slate-900 text-sm">Ch {o.chapterNumber}: {o.title}</h4>
-                        <div className="flex items-center gap-1 text-xs">
+                      <div className="flex justify-between items-start mb-1 gap-4">
+                        <div className="font-medium text-slate-900 text-sm flex items-center gap-1 w-full max-w-md">
+                          <span className="shrink-0">Ch {o.chapterNumber}:</span>
+                          <input
+                            className="bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-500 outline-none px-1 py-0.5 w-full truncate transition-colors"
+                            value={o.title || ''}
+                            placeholder="Chapter Title"
+                            onChange={(e) => {
+                              const newOutline = [...project.outline];
+                              newOutline[i].title = e.target.value;
+                              updateProject(project.id, { outline: newOutline });
+                            }}
+                          />
+                        </div>
+                        <div className="flex items-center gap-1 text-xs shrink-0">
                           <span className="text-slate-500">POV:</span>
                           <input
                             className="font-medium text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded outline-none border border-transparent focus:border-indigo-300 w-24 text-center"
@@ -533,7 +545,16 @@ export function Workspace() {
                           />
                         </div>
                       </div>
-                      <p className="text-sm text-slate-700 leading-relaxed">{o.summary}</p>
+                      <textarea
+                        className="text-sm text-slate-700 bg-transparent w-full resize-none h-20 outline-none border border-transparent hover:border-slate-200 focus:border-indigo-500/30 focus:bg-white/20 p-1 rounded transition-all leading-relaxed"
+                        value={o.summary || ''}
+                        placeholder="Chapter summary..."
+                        onChange={(e) => {
+                          const newOutline = [...project.outline];
+                          newOutline[i].summary = e.target.value;
+                          updateProject(project.id, { outline: newOutline });
+                        }}
+                      />
                     </div>
                   ))}
                 </div>
@@ -600,9 +621,28 @@ export function Workspace() {
                 return (
                   <>
                     <div className="p-4 border-b border-white/40 flex items-start gap-4 bg-white/20">
-                      <div className="min-w-0 flex-1">
-                        <h2 className="font-medium text-slate-900 truncate">Chapter {selectedChapter}: {outDef?.title}</h2>
-                        <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">{outDef?.summary}</p>
+                      <div className="min-w-0 flex-1 pr-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium text-slate-900 shrink-0">Chapter {selectedChapter}:</span>
+                          <input
+                            className="font-medium text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-500 outline-none px-1 py-0.5 w-full max-w-md truncate transition-colors"
+                            value={outDef?.title || ''}
+                            placeholder="Chapter Title"
+                            onChange={(e) => {
+                              const newOutline = project.outline.map(o => o.chapterNumber === selectedChapter ? { ...o, title: e.target.value } : o);
+                              updateProject(project.id, { outline: newOutline });
+                            }}
+                          />
+                        </div>
+                        <textarea
+                          className="text-xs text-slate-600 w-full resize-none h-16 outline-none bg-transparent border border-transparent hover:border-slate-200 focus:border-indigo-500/30 focus:bg-white/20 p-1 rounded transition-all leading-relaxed"
+                          value={outDef?.summary || ''}
+                          placeholder="Chapter summary..."
+                          onChange={(e) => {
+                            const newOutline = project.outline.map(o => o.chapterNumber === selectedChapter ? { ...o, summary: e.target.value } : o);
+                            updateProject(project.id, { outline: newOutline });
+                          }}
+                        />
                       </div>
                       <div className="flex items-center gap-2 pt-0.5">
                         {data?.status === 'drafted' && data.content && (
