@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { generateChatCompletion } from '@/lib/inference';
-import { Loader2, Send, Book, Bot, User, Copy, Download, Trash2 } from 'lucide-react';
+import { Loader2, Send, Book, Bot, User, Copy, Download, Trash2, Check } from 'lucide-react';
 
 interface Token {
   type: 'text' | 'bold' | 'italic' | 'code' | 'link';
@@ -264,6 +264,7 @@ export function PlanningTab() {
   const { state, updatePlanningChat, updatePlanningChatConfig } = useStore();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const messages = React.useMemo(() => state.planningChat || [], [state.planningChat]);
@@ -372,7 +373,42 @@ export function PlanningTab() {
 
   const handleCopyChat = () => {
     const text = messages.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}:\n${m.content}`).join('\n\n---\n\n');
-    navigator.clipboard.writeText(text);
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text)
+        .then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        })
+        .catch(err => {
+          console.error('Failed to copy text: ', err);
+          fallbackCopyText(text);
+        });
+    } else {
+      fallbackCopyText(text);
+    }
+  };
+
+  const fallbackCopyText = (text: string) => {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.top = "0";
+    textArea.style.left = "0";
+    textArea.style.position = "fixed";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+      const successful = document.execCommand('copy');
+      if (successful) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } else {
+        console.error('Fallback copy failed');
+      }
+    } catch (err) {
+      console.error('Fallback copy failed', err);
+    }
+    document.body.removeChild(textArea);
   };
 
   const handleDownloadChat = () => {
@@ -398,9 +434,18 @@ export function PlanningTab() {
   return (
     <div className="flex flex-col h-full bg-transparent overflow-hidden relative">
       {messages.length > 0 && (
-        <div className="absolute top-4 right-6 flex items-center gap-2 z-10">
+        <div className="absolute top-2.5 right-6 flex items-center gap-2 z-10">
           <button onClick={handleCopyChat} className="p-1.5 px-2.5 bg-white/80 backdrop-blur-sm border border-white/60 text-slate-600 hover:bg-white text-xs font-medium rounded-lg shadow-sm transition-all flex items-center gap-1.5" title="Copy Chat">
-            <Copy size={14} /> Copy
+            {copied ? (
+              <>
+                <Check size={14} className="text-emerald-500" />
+                <span className="text-emerald-600 font-semibold">Copied!</span>
+              </>
+            ) : (
+              <>
+                <Copy size={14} /> Copy
+              </>
+            )}
           </button>
           <button onClick={handleDownloadChat} className="p-1.5 px-2.5 bg-white/80 backdrop-blur-sm border border-white/60 text-slate-600 hover:bg-white text-xs font-medium rounded-lg shadow-sm transition-all flex items-center gap-1.5" title="Download Chat">
             <Download size={14} /> Download
@@ -416,7 +461,7 @@ export function PlanningTab() {
           <h2 className="text-4xl font-semibold text-slate-800 tracking-tight mb-8">Ask away!</h2>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto px-6 pb-6 pt-14 space-y-6 custom-scrollbar">
           {messages.map((msg, i) => (
             <div key={i} className={`flex gap-4 max-w-3xl mx-auto ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               {msg.role === 'assistant' && (
