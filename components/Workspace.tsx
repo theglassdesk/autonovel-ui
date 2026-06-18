@@ -229,16 +229,18 @@ export function Workspace() {
             className="text-lg font-medium text-slate-900 focus:outline-none placeholder-slate-400 bg-transparent w-full truncate"
             placeholder="Novel Title"
           />
-          {project.synopsis && (
-            <button
-              onClick={handleGenerateTitle}
-              disabled={loading === 'title'}
-              className="ml-2 p-1.5 shrink-0 text-indigo-500 hover:bg-white/40 rounded transition-colors disabled:opacity-50 opacity-0 group-hover:opacity-100"
-              title="Suggest Title"
-            >
-              {loading === 'title' ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
-            </button>
-          )}
+          <button
+            onClick={handleGenerateTitle}
+            disabled={loading === 'title' || !project.synopsis}
+            className={`ml-2 p-1.5 shrink-0 rounded transition-colors ${
+              !project.synopsis || loading === 'title'
+                ? 'text-slate-400 cursor-not-allowed opacity-40'
+                : 'text-indigo-500 hover:bg-white/40 hover:text-indigo-600'
+            }`}
+            title={!project.synopsis ? "Generate synopsis first to suggest title" : "Suggest Title"}
+          >
+            {loading === 'title' ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
+          </button>
         </div>
 
         <div className="flex items-center gap-3">
