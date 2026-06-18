@@ -30,8 +30,8 @@ export function Workspace() {
     setLoading('synopsis');
     setError(null);
     try {
-      const endpointURL = state.settings.provider === 'local' ? state.settings.apiUrl : '/api';
-      const result = await generateSynopsis(endpointURL, state.settings.model, state.settings.systemPrompt, project.title, project.premise, state.settings.provider);
+      const endpointURL = state.settings.draftingProvider === 'local' ? state.settings.apiUrl : '/api';
+      const result = await generateSynopsis(endpointURL, state.settings.draftingModel, state.settings.systemPrompt, project.title, project.premise, state.settings.draftingProvider);
       updateProject(project.id, { synopsis: result });
     } catch (e: any) {
       setError(e.message);
@@ -44,8 +44,8 @@ export function Workspace() {
     setLoading('characters');
     setError(null);
     try {
-      const endpointURL = state.settings.provider === 'local' ? state.settings.apiUrl : '/api';
-      const result = await generateCharacters(endpointURL, state.settings.model, state.settings.systemPrompt, project.synopsis, state.settings.provider);
+      const endpointURL = state.settings.draftingProvider === 'local' ? state.settings.apiUrl : '/api';
+      const result = await generateCharacters(endpointURL, state.settings.draftingModel, state.settings.systemPrompt, project.synopsis, state.settings.draftingProvider);
       const charactersWithIds = result.map((c: any) => ({
         id: c.id || crypto.randomUUID(),
         name: c.name || '',
@@ -64,8 +64,8 @@ export function Workspace() {
     setLoading('outline');
     setError(null);
     try {
-      const endpointURL = state.settings.provider === 'local' ? state.settings.apiUrl : '/api';
-      const result = await generateOutline(endpointURL, state.settings.model, state.settings.systemPrompt, project.synopsis, project.characters, project.targetChapterCount || 10, project.outlineTemplate || '', state.settings.provider);
+      const endpointURL = state.settings.draftingProvider === 'local' ? state.settings.apiUrl : '/api';
+      const result = await generateOutline(endpointURL, state.settings.draftingModel, state.settings.systemPrompt, project.synopsis, project.characters, project.targetChapterCount || 10, project.outlineTemplate || '', state.settings.draftingProvider);
 
       // Initialize chapter data based on outline
       const newChapters = result.map((c: any) => ({
@@ -87,8 +87,8 @@ export function Workspace() {
     setLoading('continue-outline');
     setError(null);
     try {
-      const endpointURL = state.settings.provider === 'local' ? state.settings.apiUrl : '/api';
-      const newOutlineData = await continueOutline(endpointURL, state.settings.model, state.settings.systemPrompt, project.synopsis, project.characters, project.outline, project.outlineTemplate || '', state.settings.provider);
+      const endpointURL = state.settings.draftingProvider === 'local' ? state.settings.apiUrl : '/api';
+      const newOutlineData = await continueOutline(endpointURL, state.settings.draftingModel, state.settings.systemPrompt, project.synopsis, project.characters, project.outline, project.outlineTemplate || '', state.settings.draftingProvider);
 
       const combinedOutline = [...project.outline, ...newOutlineData];
 
@@ -119,7 +119,7 @@ export function Workspace() {
     });
 
     try {
-      const endpointURL = state.settings.provider === 'local' ? state.settings.apiUrl : '/api';
+      const endpointURL = state.settings.draftingProvider === 'local' ? state.settings.apiUrl : '/api';
       const guardrails = {
         craft: state.settings.craftRules,
         antiSlop: state.settings.antiSlop,
@@ -143,12 +143,12 @@ export function Workspace() {
 
       const result = await generateChapter(
         endpointURL,
-        state.settings.model,
+        state.settings.draftingModel,
         state.settings.systemPrompt,
         project.synopsis,
         project.outline,
         chapNum,
-        state.settings.provider,
+        state.settings.draftingProvider,
         guardrails,
         existingContent,
         project.povType || 'First Person (I/me)',
@@ -172,8 +172,8 @@ export function Workspace() {
     setLoading('title');
     setError(null);
     try {
-      const endpointURL = state.settings.provider === 'local' ? state.settings.apiUrl : '/api';
-      const result = await generateTitle(endpointURL, state.settings.model, state.settings.systemPrompt, project.synopsis, state.settings.provider);
+      const endpointURL = state.settings.draftingProvider === 'local' ? state.settings.apiUrl : '/api';
+      const result = await generateTitle(endpointURL, state.settings.draftingModel, state.settings.systemPrompt, project.synopsis, state.settings.draftingProvider);
       updateProject(project.id, { title: result });
     } catch (e: any) {
       setError(e.message);

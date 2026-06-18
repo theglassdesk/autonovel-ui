@@ -44,9 +44,11 @@ export type AppState = {
   planningChat?: { role: 'user' | 'assistant'; content: string }[];
   planningChatConfig?: { projectId: string; modelId: string };
   settings: {
-    provider: 'local' | 'gemini' | 'anthropic' | 'openrouter';
+    draftingProvider: 'local' | 'gemini' | 'anthropic' | 'openrouter';
+    draftingModel: string;
+    chatProvider: 'local' | 'gemini' | 'anthropic' | 'openrouter';
+    chatModel: string;
     apiUrl: string;
-    model: string;
     systemPrompt: string;
     craftRules: string;
     antiSlop: string;
@@ -69,9 +71,11 @@ type StoreContextType = {
 };
 
 const defaultSettings = {
-  provider: 'gemini' as const,
+  draftingProvider: 'gemini' as const,
+  draftingModel: 'gemini-2.5-flash',
+  chatProvider: 'gemini' as const,
+  chatModel: 'gemini-2.5-flash',
   apiUrl: 'http://127.0.0.1:1234/v1', // LM Studio default
-  model: 'local-model',
   systemPrompt: 'You are an award-winning novelist writing a gripping book. Respond thoughtfully and adhere closely to the instructions.',
   craftRules: 'Show, don\'t tell. Prioritize sensory details (sight, sound, smell, touch, taste). Ground the reader in the physical space before jumping into dialogue. Ensure character voices are distinct and authentic.',
   antiSlop: 'AVOID these overused AI words and phrases: "tapestry", "testament", "symphony", "labyrinth", "shivers down spine", "let out a breath they didn\'t know they were holding", "eyes flashed", "needless to say", "in a world where", "a dance of", "delve".',
@@ -91,11 +95,27 @@ function loadState(): AppState {
         parsed.settings = { ...defaultSettings, ...parsed.settings };
         // Migrate from useGemini boolean to provider string
         if (typeof (parsed.settings as any).useGemini === 'boolean') {
-            parsed.settings.provider = (parsed.settings as any).useGemini ? 'gemini' : 'local';
+            parsed.settings.draftingProvider = (parsed.settings as any).useGemini ? 'gemini' : 'local';
+            parsed.settings.chatProvider = parsed.settings.draftingProvider;
             delete (parsed.settings as any).useGemini;
-        } else if (typeof parsed.settings.provider === 'undefined') {
-            parsed.settings.provider = 'gemini';
         }
+        
+        // Migrate from single provider to drafting/chat providers
+        if ((parsed.settings as any).provider && !parsed.settings.draftingProvider) {
+          parsed.settings.draftingProvider = (parsed.settings as any).provider;
+          parsed.settings.chatProvider = (parsed.settings as any).provider;
+          delete (parsed.settings as any).provider;
+        }
+        if ((parsed.settings as any).model && !parsed.settings.draftingModel) {
+          parsed.settings.draftingModel = (parsed.settings as any).model;
+          parsed.settings.chatModel = (parsed.settings as any).model;
+          delete (parsed.settings as any).model;
+        }
+
+        if (typeof parsed.settings.draftingProvider === 'undefined') parsed.settings.draftingProvider = defaultSettings.draftingProvider;
+        if (typeof parsed.settings.draftingModel === 'undefined') parsed.settings.draftingModel = defaultSettings.draftingModel;
+        if (typeof parsed.settings.chatProvider === 'undefined') parsed.settings.chatProvider = defaultSettings.chatProvider;
+        if (typeof parsed.settings.chatModel === 'undefined') parsed.settings.chatModel = defaultSettings.chatModel;
         if (typeof parsed.settings.craftRules === 'undefined') parsed.settings.craftRules = defaultSettings.craftRules;
         if (typeof parsed.settings.antiSlop === 'undefined') parsed.settings.antiSlop = defaultSettings.antiSlop;
         if (typeof parsed.settings.antiPatterns === 'undefined') parsed.settings.antiPatterns = defaultSettings.antiPatterns;

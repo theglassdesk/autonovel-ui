@@ -1,11 +1,48 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore, AppState } from '@/lib/store';
 import { X, Download, Upload } from 'lucide-react';
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const { state, updateSettings, importState, getCurrentProject } = useStore();
+
+  const [draftingModels, setDraftingModels] = useState<{id: string, label: string}[]>([]);
+  const [chatModels, setChatModels] = useState<{id: string, label: string}[]>([]);
+  const [loadingDrafting, setLoadingDrafting] = useState(false);
+  const [loadingChat, setLoadingChat] = useState(false);
+
+  useEffect(() => {
+    async function fetchModels() {
+      setLoadingDrafting(true);
+      try {
+        const res = await fetch(`/api/models?provider=${state.settings.draftingProvider}`);
+        const data = await res.json();
+        if (data.data) setDraftingModels(data.data);
+      } catch (e) {
+        console.error("Failed to fetch drafting models", e);
+      } finally {
+        setLoadingDrafting(false);
+      }
+    }
+    fetchModels();
+  }, [state.settings.draftingProvider]);
+
+  useEffect(() => {
+    async function fetchModels() {
+      setLoadingChat(true);
+      try {
+        const res = await fetch(`/api/models?provider=${state.settings.chatProvider}`);
+        const data = await res.json();
+        if (data.data) setChatModels(data.data);
+      } catch (e) {
+        console.error("Failed to fetch chat models", e);
+      } finally {
+        setLoadingChat(false);
+      }
+    }
+    fetchModels();
+  }, [state.settings.chatProvider]);
 
   const handleExport = () => {
     const dateStr = new Date().toISOString().split('T')[0];
@@ -85,24 +122,24 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
 
-          {/* Section: Inference */}
+          {/* Section: Drafting Engine */}
           <div className="space-y-4">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-gray-100 pb-2">Inference Engine</h3>
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-gray-100 pb-2">Drafting Engine (Writing & Outlines)</h3>
 
             <div className="space-y-3 p-3 bg-white border border-gray-200 rounded-lg">
               <div>
                 <label className="block text-xs font-semibold text-gray-800 mb-1">AI Provider</label>
                 <select
-                  value={state.settings.provider}
+                  value={state.settings.draftingProvider}
                   onChange={(e) => {
-                    const newProvider = e.target.value as AppState['settings']['provider'];
-                    let defaultModel = state.settings.model;
+                    const newProvider = e.target.value as AppState['settings']['draftingProvider'];
+                    let defaultModel = state.settings.draftingModel;
                     if (newProvider === 'gemini') defaultModel = 'gemini-2.5-flash';
                     if (newProvider === 'anthropic') defaultModel = 'claude-3-5-sonnet-20241022';
                     if (newProvider === 'openrouter') defaultModel = 'google/gemma-4-31b-it:free';
                     if (newProvider === 'local') defaultModel = 'local-model';
 
-                    updateSettings({ provider: newProvider, model: defaultModel });
+                    updateSettings({ draftingProvider: newProvider, draftingModel: defaultModel });
                   }}
                   className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
                 >
@@ -114,7 +151,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 <p className="text-[11px] text-gray-500 mt-1">Ensure you have the correct API keys in your `.env` file for cloud providers.</p>
               </div>
 
-              {state.settings.provider === 'local' && (
+              {state.settings.draftingProvider === 'local' && (
                 <div className="pt-2 border-t border-gray-100">
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Local Inference API URL</label>
                   <input
@@ -130,50 +167,25 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">Model Name</label>
+              <label className="flex justify-between items-center text-xs font-semibold text-gray-500 mb-1">
+                <span>Model Name</span>
+                {loadingDrafting && <span className="text-[10px] text-indigo-400 animate-pulse">Fetching...</span>}
+              </label>
               <input
                 type="text"
-                list="model-suggestions"
-                value={state.settings.model}
-                onChange={(e) => updateSettings({ model: e.target.value })}
+                list="drafting-model-suggestions"
+                value={state.settings.draftingModel}
+                onChange={(e) => updateSettings({ draftingModel: e.target.value })}
                 placeholder="Model ID or Alias (e.g., gemini-2.5-flash)"
                 className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
               />
-              <datalist id="model-suggestions">
-                {state.settings.provider === 'gemini' && (
-                  <>
-                    <option value="gemini-2.5-flash" />
-                    <option value="gemini-2.5-pro" />
-                    <option value="gemini-2.0-flash" />
-                    <option value="gemini-2.0-pro-exp" />
-                  </>
-                )}
-                {state.settings.provider === 'anthropic' && (
-                  <>
-                    <option value="claude-3-7-sonnet-20250219" />
-                    <option value="claude-3-5-sonnet-20241022" />
-                    <option value="claude-3-5-haiku-20241022" />
-                    <option value="claude-3-opus-20240229" />
-                  </>
-                )}
-                {state.settings.provider === 'openrouter' && (
-                  <>
-                    <option value="openai/gpt-4o" />
-                    <option value="openai/gpt-4o-mini" />
-                    <option value="openai/o1" />
-                    <option value="openai/o3-mini" />
-                    <option value="anthropic/claude-3.7-sonnet" />
-                    <option value="anthropic/claude-3.5-sonnet" />
-                    <option value="meta-llama/llama-3.3-70b-instruct" />
-                    <option value="google/gemini-2.5-flash" />
-                    <option value="google/gemini-2.5-pro" />
-                    <option value="deepseek/deepseek-r1" />
-                    <option value="deepseek/deepseek-chat" />
-                  </>
-                )}
+              <datalist id="drafting-model-suggestions">
+                {draftingModels.map(m => (
+                  <option key={m.id} value={m.id}>{m.label}</option>
+                ))}
               </datalist>
             </div>
-
+            
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Base System Prompt</label>
               <textarea
@@ -182,6 +194,68 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 rows={3}
                 className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-y font-mono text-xs"
               />
+            </div>
+          </div>
+
+          {/* Section: Chat Engine */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-gray-100 pb-2">Chat Engine (Planning Tab)</h3>
+
+            <div className="space-y-3 p-3 bg-white border border-gray-200 rounded-lg">
+              <div>
+                <label className="block text-xs font-semibold text-gray-800 mb-1">AI Provider</label>
+                <select
+                  value={state.settings.chatProvider}
+                  onChange={(e) => {
+                    const newProvider = e.target.value as AppState['settings']['chatProvider'];
+                    let defaultModel = state.settings.chatModel;
+                    if (newProvider === 'gemini') defaultModel = 'gemini-2.5-flash';
+                    if (newProvider === 'anthropic') defaultModel = 'claude-3-5-sonnet-20241022';
+                    if (newProvider === 'openrouter') defaultModel = 'google/gemma-4-31b-it:free';
+                    if (newProvider === 'local') defaultModel = 'local-model';
+
+                    updateSettings({ chatProvider: newProvider, chatModel: defaultModel });
+                  }}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+                >
+                  <option value="gemini">Google Gemini</option>
+                  <option value="anthropic">Anthropic (Claude)</option>
+                  <option value="openrouter">OpenRouter</option>
+                  <option value="local">Local Inference (LM Studio, Ollama, etc.)</option>
+                </select>
+              </div>
+
+              {state.settings.chatProvider === 'local' && (
+                <div className="pt-2 border-t border-gray-100">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Local Inference API URL (Uses same as drafting)</label>
+                  <input
+                    type="text"
+                    value={state.settings.apiUrl}
+                    disabled
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm bg-gray-50 text-gray-500"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="flex justify-between items-center text-xs font-semibold text-gray-500 mb-1">
+                <span>Model Name</span>
+                {loadingChat && <span className="text-[10px] text-indigo-400 animate-pulse">Fetching...</span>}
+              </label>
+              <input
+                type="text"
+                list="chat-model-suggestions"
+                value={state.settings.chatModel}
+                onChange={(e) => updateSettings({ chatModel: e.target.value })}
+                placeholder="Model ID or Alias"
+                className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              />
+              <datalist id="chat-model-suggestions">
+                {chatModels.map(m => (
+                  <option key={m.id} value={m.id}>{m.label}</option>
+                ))}
+              </datalist>
             </div>
           </div>
 

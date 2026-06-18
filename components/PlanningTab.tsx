@@ -11,42 +11,31 @@ export function PlanningTab() {
 
   const messages = React.useMemo(() => state.planningChat || [], [state.planningChat]);
 
-  // Determine available models based on provider
-  const availableModels = React.useMemo(() => {
-    switch (state.settings.provider) {
-      case 'gemini':
-        return [
-          { id: 'gemini-3.5-flash', label: '3.5 Flash (Fastest)' },
-          { id: 'gemini-3.1-flash-lite', label: '3.1 Flash (Lite)' },
-          { id: 'gemini-3.1-pro-preview', label: '3.1 Pro Preview (Advanced)' },
-        ];
-      case 'anthropic':
-        return [
-          { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6' },
-          { id: 'claude-opus-4-8', label: 'Claude Opus 4.8' },
-        ];
-      case 'openrouter':
-        return [
-          { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
-          { id: 'google/gemma-4-31b-it:free', label: 'Gemma 4' },
-          { id: 'x-ai/grok-4.3', label: 'Grok 4.3' },
-          { id: 'deepseek/deepseek-v4-pro', label: 'Deepseek V4 Pro' },
-          { id: 'meta-llama/llama-3-70b-instruct', label: 'Llama 3 70B' },
-        ];
-      case 'local':
-      default:
-        return [
-          { id: 'local-model', label: 'Local Model' }
-        ];
-    }
-  }, [state.settings.provider]);
+  const [availableModels, setAvailableModels] = useState<{id: string, label: string}[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
 
-  const selectedModel = state.planningChatConfig?.modelId || '';
+  useEffect(() => {
+    async function fetchModels() {
+      setLoadingModels(true);
+      try {
+        const res = await fetch(`/api/models?provider=${state.settings.chatProvider}`);
+        const data = await res.json();
+        if (data.data) {
+          setAvailableModels(data.data);
+        }
+      } catch (e) {
+        console.error("Failed to fetch chat models", e);
+      } finally {
+        setLoadingModels(false);
+      }
+    }
+    fetchModels();
+  }, [state.settings.chatProvider]);
+
+  const selectedModel = state.planningChatConfig?.modelId || state.settings.chatModel || '';
   const selectedProjectId = state.planningChatConfig?.projectId || '';
 
-  const currentModel = React.useMemo(() => {
-    return availableModels.find(m => m.id === selectedModel) ? selectedModel : availableModels[0]?.id || '';
-  }, [availableModels, selectedModel]);
+  const currentModel = selectedModel;
 
   // Auto-scroll to bottom of messages
   useEffect(() => {
@@ -63,7 +52,7 @@ export function PlanningTab() {
     setIsLoading(true);
 
     try {
-      const endpointURL = state.settings.provider === 'local' ? state.settings.apiUrl : '/api';
+      const endpointURL = state.settings.chatProvider === 'local' ? state.settings.apiUrl : '/api';
 
       let systemPrompt = "You are a friendly helper that knows the book industry. Any questions or concerns the user has about any part of the book planning or writing process, you know about it and provide expert advice.";
 
@@ -102,11 +91,11 @@ export function PlanningTab() {
 
       const response = await generateChatCompletion(
         endpointURL,
-        currentModel || state.settings.model,
+        currentModel,
         apiMessages,
         0.7,
         undefined,
-        state.settings.provider
+        state.settings.chatProvider
       );
 
       updatePlanningChat([
@@ -242,16 +231,21 @@ export function PlanningTab() {
             />
 
             <div className="flex items-center gap-2 pr-3">
-              <select
-                value={currentModel}
-                onChange={(e) => updatePlanningChatConfig({ projectId: selectedProjectId, modelId: e.target.value })}
-                className="appearance-none bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium py-1.5 pl-3 pr-8 rounded-full outline-none transition-colors border border-transparent cursor-pointer"
-                style={{ backgroundImage: 'url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23475569%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E")', backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px top 50%', backgroundSize: '8px auto' }}
-              >
-                {availableModels.map(m => (
-                  <option key={m.id} value={m.id}>{m.label}</option>
-                ))}
-              </select>
+              <div className="relative">
+                <input
+                  type="text"
+                  list="planning-chat-models"
+                  value={currentModel}
+                  onChange={(e) => updatePlanningChatConfig({ projectId: selectedProjectId, modelId: e.target.value })}
+                  placeholder={loadingModels ? "Loading..." : "Model ID"}
+                  className="w-32 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium py-1.5 px-3 rounded-full outline-none transition-colors border border-transparent placeholder-slate-400"
+                />
+                <datalist id="planning-chat-models">
+                  {availableModels.map(m => (
+                    <option key={m.id} value={m.id}>{m.label}</option>
+                  ))}
+                </datalist>
+              </div>
 
               <button
                 onClick={handleSend}
