@@ -213,8 +213,7 @@ export async function generateChapter(
     if (previousChapterData.title) userPrompt += `Chapter ${chapterNumber - 1}: ${previousChapterData.title}\n`;
     if (previousChapterData.summary) userPrompt += `Summary: ${previousChapterData.summary}\n`;
     if (previousChapterData.content) {
-      const prevContent = previousChapterData.content.slice(-3000);
-      userPrompt += `Ending text: ...\n${prevContent}\n`;
+      userPrompt += `Content:\n${previousChapterData.content}\n`;
     }
     userPrompt += `\n`;
   }

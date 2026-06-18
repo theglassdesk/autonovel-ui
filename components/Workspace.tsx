@@ -151,7 +151,7 @@ export function Workspace() {
         state.settings.draftingProvider,
         guardrails,
         existingContent,
-        project.povType || 'First Person (I/me)',
+        project.povType || 'Third Person Limited',
         project.characters,
         previousChapterData
       );
@@ -474,7 +474,7 @@ export function Workspace() {
                               className="w-full px-3 py-2 border border-white/40 bg-white/50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                             >
                               <option value="First Person (I/me)">First Person (I/me)</option>
-                              <option value="Third Person Limited (he/she)">Third Person Limited (he/she)</option>
+                              <option value="Third Person Limited">Third Person Limited (he/she)</option>
                               <option value="Third Person Omniscient">Third Person Omniscient</option>
                             </select>
                           </div>
