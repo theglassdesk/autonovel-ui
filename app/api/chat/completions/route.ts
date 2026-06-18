@@ -8,7 +8,10 @@ export async function POST(req: NextRequest) {
     const { model, messages, temperature = 0.7, max_tokens, provider } = await req.json();
 
     if (provider === 'anthropic') {
-      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!apiKey) throw new Error("ANTHROPIC_API_KEY is missing in your .env file.");
+      
+      const anthropic = new Anthropic({ apiKey });
       // Extract system message
       let system = "";
       const filteredMessages = [];
@@ -41,9 +44,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (provider === 'openrouter') {
+      const apiKey = process.env.OPENROUTER_API_KEY;
+      if (!apiKey) throw new Error("OPENROUTER_API_KEY is missing in your .env file.");
+
       const openai = new OpenAI({
         baseURL: "https://openrouter.ai/api/v1",
-        apiKey: process.env.OPENROUTER_API_KEY,
+        apiKey,
       });
 
       const response = await openai.chat.completions.create({

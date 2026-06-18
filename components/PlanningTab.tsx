@@ -27,7 +27,7 @@ export function PlanningTab() {
         ];
       case 'openrouter':
         return [
-          { id: 'openai/gpt-4o', label: 'GPT-4o' },
+          { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash' },
           { id: 'google/gemma-4-31b-it:free', label: 'Gemma 4' },
           { id: 'x-ai/grok-4.3', label: 'Grok 4.3' },
           { id: 'deepseek/deepseek-v4-pro', label: 'Deepseek V4 Pro' },
