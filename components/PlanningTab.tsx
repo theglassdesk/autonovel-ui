@@ -3,6 +3,263 @@ import { useStore } from '@/lib/store';
 import { generateChatCompletion } from '@/lib/inference';
 import { Loader2, Send, Book, Bot, User, Copy, Download, Trash2 } from 'lucide-react';
 
+interface Token {
+  type: 'text' | 'bold' | 'italic' | 'code' | 'link';
+  content: string;
+  href?: string;
+}
+
+function parseInline(text: string): React.ReactNode[] {
+  let parts: Token[] = [
+    { type: 'text', content: text }
+  ];
+
+  // 1. Bold (**text**)
+  parts = parts.flatMap((p): Token[] => {
+    if (p.type !== 'text') return [p];
+    const regex = /\*\*([^*]+)\*\*/g;
+    const subParts: Token[] = [];
+    let lastIndex = 0;
+    let match;
+    while ((match = regex.exec(p.content)) !== null) {
+      if (match.index > lastIndex) {
+        subParts.push({ type: 'text', content: p.content.slice(lastIndex, match.index) });
+      }
+      subParts.push({ type: 'bold', content: match[1] });
+      lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < p.content.length) {
+      subParts.push({ type: 'text', content: p.content.slice(lastIndex) });
+    }
+    return subParts;
+  });
+
+  // 2. Italic (*text*)
+  parts = parts.flatMap((p): Token[] => {
+    if (p.type !== 'text') return [p];
+    const regex = /\*([^*]+)\*/g;
+    const subParts: Token[] = [];
+    let lastIndex = 0;
+    let match;
+    while ((match = regex.exec(p.content)) !== null) {
+      if (match.index > lastIndex) {
+        subParts.push({ type: 'text', content: p.content.slice(lastIndex, match.index) });
+      }
+      subParts.push({ type: 'italic', content: match[1] });
+      lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < p.content.length) {
+      subParts.push({ type: 'text', content: p.content.slice(lastIndex) });
+    }
+    return subParts;
+  });
+
+  // 3. Italic (_text_)
+  parts = parts.flatMap((p): Token[] => {
+    if (p.type !== 'text') return [p];
+    const regex = /_([^_]+)_/g;
+    const subParts: Token[] = [];
+    let lastIndex = 0;
+    let match;
+    while ((match = regex.exec(p.content)) !== null) {
+      if (match.index > lastIndex) {
+        subParts.push({ type: 'text', content: p.content.slice(lastIndex, match.index) });
+      }
+      subParts.push({ type: 'italic', content: match[1] });
+      lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < p.content.length) {
+      subParts.push({ type: 'text', content: p.content.slice(lastIndex) });
+    }
+    return subParts;
+  });
+
+  // 4. Code (`code`)
+  parts = parts.flatMap((p): Token[] => {
+    if (p.type !== 'text') return [p];
+    const regex = /`([^`]+)`/g;
+    const subParts: Token[] = [];
+    let lastIndex = 0;
+    let match;
+    while ((match = regex.exec(p.content)) !== null) {
+      if (match.index > lastIndex) {
+        subParts.push({ type: 'text', content: p.content.slice(lastIndex, match.index) });
+      }
+      subParts.push({ type: 'code', content: match[1] });
+      lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < p.content.length) {
+      subParts.push({ type: 'text', content: p.content.slice(lastIndex) });
+    }
+    return subParts;
+  });
+
+  // 5. Links ([label](url))
+  parts = parts.flatMap((p): Token[] => {
+    if (p.type !== 'text') return [p];
+    const regex = /\[([^\]]+)\]\(([^)]+)\)/g;
+    const subParts: Token[] = [];
+    let lastIndex = 0;
+    let match;
+    while ((match = regex.exec(p.content)) !== null) {
+      if (match.index > lastIndex) {
+        subParts.push({ type: 'text', content: p.content.slice(lastIndex, match.index) });
+      }
+      subParts.push({ type: 'link', content: match[1], href: match[2] });
+      lastIndex = regex.lastIndex;
+    }
+    if (lastIndex < p.content.length) {
+      subParts.push({ type: 'text', content: p.content.slice(lastIndex) });
+    }
+    return subParts;
+  });
+
+  return parts.map((p, idx) => {
+    switch (p.type) {
+      case 'bold':
+        return <strong key={idx} className="font-semibold text-slate-950">{p.content}</strong>;
+      case 'italic':
+        return <em key={idx} className="italic text-slate-800">{p.content}</em>;
+      case 'code':
+        return <code key={idx} className="bg-slate-100/80 px-1.5 py-0.5 rounded font-mono text-xs text-indigo-600 border border-slate-200/50">{p.content}</code>;
+      case 'link':
+        return <a key={idx} href={p.href} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">{p.content}</a>;
+      default:
+        return <React.Fragment key={idx}>{p.content}</React.Fragment>;
+    }
+  });
+}
+
+function renderMarkdown(text: string): React.ReactNode {
+  const lines = text.split('\n');
+  const elements: React.ReactNode[] = [];
+  let currentList: { type: 'ul' | 'ol'; items: string[] } | null = null;
+  let currentParagraph: string[] = [];
+
+  const flushParagraph = (key: number) => {
+    if (currentParagraph.length > 0) {
+      elements.push(
+        <p key={`p-${key}`} className="mb-3 last:mb-0">
+          {parseInline(currentParagraph.join(' '))}
+        </p>
+      );
+      currentParagraph = [];
+    }
+  };
+
+  const flushList = (key: number) => {
+    if (currentList) {
+      const ListTag = currentList.type === 'ol' ? 'ol' : 'ul';
+      const listClass = currentList.type === 'ol' ? 'list-decimal pl-6 mb-3' : 'list-disc pl-6 mb-3';
+      elements.push(
+        <ListTag key={`list-${key}`} className={listClass}>
+          {currentList.items.map((item, idx) => (
+            <li key={idx} className="mb-1">
+              {parseInline(item)}
+            </li>
+          ))}
+        </ListTag>
+      );
+      currentList = null;
+    }
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // 1. Empty lines
+    if (trimmed === '') {
+      flushParagraph(i);
+      flushList(i);
+      continue;
+    }
+
+    // 2. Horizontal Rule
+    if (trimmed === '---' || trimmed === '***' || trimmed === '___') {
+      flushParagraph(i);
+      flushList(i);
+      elements.push(<hr key={`hr-${i}`} className="my-4 border-t border-slate-200/80" />);
+      continue;
+    }
+
+    // 3. Headers
+    if (trimmed.startsWith('#')) {
+      flushParagraph(i);
+      flushList(i);
+
+      const match = trimmed.match(/^(#{1,6})\s+(.*)$/);
+      if (match) {
+        const level = match[1].length;
+        const content = match[2];
+        const headingClass = level === 1 ? 'text-2xl font-bold mt-4 mb-2 text-slate-900' :
+                             level === 2 ? 'text-xl font-semibold mt-4 mb-2 text-slate-900' :
+                             level === 3 ? 'text-lg font-semibold mt-3 mb-2 text-slate-900' :
+                             'text-base font-semibold mt-2 mb-1 text-slate-900';
+        const HeadingTag = `h${level}` as any;
+        elements.push(
+          <HeadingTag key={`h-${i}`} className={headingClass}>
+            {parseInline(content)}
+          </HeadingTag>
+        );
+        continue;
+      }
+    }
+
+    // 4. Unordered lists
+    const ulMatch = line.match(/^(\s*)[-*+]\s+(.*)$/);
+    if (ulMatch) {
+      flushParagraph(i);
+      const content = ulMatch[2];
+      if (currentList && currentList.type === 'ul') {
+        currentList.items.push(content);
+      } else {
+        flushList(i);
+        currentList = { type: 'ul', items: [content] };
+      }
+      continue;
+    }
+
+    // 5. Ordered lists
+    const olMatch = line.match(/^(\s*)\d+\.\s+(.*)$/);
+    if (olMatch) {
+      flushParagraph(i);
+      const content = olMatch[2];
+      if (currentList && currentList.type === 'ol') {
+        currentList.items.push(content);
+      } else {
+        flushList(i);
+        currentList = { type: 'ol', items: [content] };
+      }
+      continue;
+    }
+
+    // 6. Blockquote
+    if (trimmed.startsWith('>')) {
+      flushParagraph(i);
+      flushList(i);
+      const content = trimmed.replace(/^>\s*/, '');
+      elements.push(
+        <blockquote key={`bq-${i}`} className="border-l-4 border-indigo-200 pl-4 italic text-slate-600 mb-3 bg-indigo-50/20 py-1 rounded-r">
+          {parseInline(content)}
+        </blockquote>
+      );
+      continue;
+    }
+
+    // 7. Normal text lines
+    if (currentList) {
+      flushList(i);
+    }
+    currentParagraph.push(line);
+  }
+
+  flushParagraph(lines.length);
+  flushList(lines.length);
+
+  return <>{elements}</>;
+}
+
 export function PlanningTab() {
   const { state, updatePlanningChat, updatePlanningChatConfig } = useStore();
   const [input, setInput] = useState('');
@@ -169,9 +426,15 @@ export function PlanningTab() {
               )}
               <div className={`px-5 py-3.5 rounded-2xl text-sm leading-relaxed ${msg.role === 'user'
                 ? 'bg-indigo-600 text-white rounded-br-sm'
-                : 'bg-white/60 border border-white/60 text-slate-800 rounded-bl-sm shadow-sm whitespace-pre-wrap'
+                : 'bg-white/60 border border-white/60 text-slate-800 rounded-bl-sm shadow-sm'
                 }`}>
-                {msg.content}
+                {msg.role === 'user' ? (
+                  <div className="whitespace-pre-wrap">{msg.content}</div>
+                ) : (
+                  <div className="text-slate-800">
+                    {renderMarkdown(msg.content)}
+                  </div>
+                )}
               </div>
               {msg.role === 'user' && (
                 <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center shrink-0">
