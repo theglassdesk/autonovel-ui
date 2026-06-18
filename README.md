@@ -1,6 +1,6 @@
 # AutoNovel UI
 
-AutoNovel UI is a streamlined, desktop-style interface for local inference novel generation pipelines. It allows you to build a novel from a premise, to an outline, to fully drafted chapters using either local AI models (via LM Studio, Ollama, etc.) or cloud-based Gemini models.
+AutoNovel UI is a streamlined, desktop-style interface for local inference novel generation pipelines. It allows you to build a novel from a premise, to an outline, to fully drafted chapters using either local AI models (via LM Studio, Ollama, etc.) or cloud-based models.
 
 ## How to Run This Application
 
@@ -30,6 +30,7 @@ If you prefer to have the application running locally on your computer, you can 
    - Run `npm install` to install all required packages.
 4. **Environment Variables**:
    - Copy `.env.example` to `.env` (or `.env.local`).
+   - cp .env.example .env
    - If you plan to use Cloud inference (Gemini), add your `GEMINI_API_KEY` to the `.env` file.
 5. **Start the Development Server**:
    - Run `npm run dev`.
