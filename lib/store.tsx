@@ -67,7 +67,7 @@ type StoreContextType = {
   updatePlanningChat: (messages: { role: 'user' | 'assistant'; content: string }[]) => void;
   updatePlanningChatConfig: (config: { projectId: string; modelId: string } | undefined) => void;
   getCurrentProject: () => NovelProject | undefined;
-  importState: (newState: AppState) => void;
+  importState: (newState: Partial<AppState>) => void;
 };
 
 const defaultSettings = {
@@ -153,7 +153,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         fetch('/api/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(state)
+          body: JSON.stringify({ projects: state.projects })
         }).catch(err => console.error('Auto-save to disk failed:', err));
       }
     }
@@ -224,8 +224,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return state.projects.find(p => p.id === state.currentProjectId);
   };
 
-  const importState = (newState: AppState) => {
-    setState(newState);
+  const importState = (newState: Partial<AppState>) => {
+    setState(prev => {
+      const mergedProjects = newState.projects || prev.projects;
+      const mergedSettings = newState.settings 
+        ? { ...defaultSettings, ...prev.settings, ...newState.settings }
+        : prev.settings;
+      
+      let mergedCurrentProjectId = prev.currentProjectId;
+      if (newState.currentProjectId !== undefined) {
+        mergedCurrentProjectId = newState.currentProjectId;
+      }
+      if (mergedCurrentProjectId && !mergedProjects.some(p => p.id === mergedCurrentProjectId)) {
+        mergedCurrentProjectId = mergedProjects.length > 0 ? mergedProjects[0].id : null;
+      }
+
+      const mergedPlanningChat = newState.planningChat !== undefined ? newState.planningChat : prev.planningChat;
+      const mergedPlanningChatConfig = newState.planningChatConfig !== undefined ? newState.planningChatConfig : prev.planningChatConfig;
+
+      return {
+        ...prev,
+        projects: mergedProjects,
+        settings: mergedSettings,
+        currentProjectId: mergedCurrentProjectId,
+        planningChat: mergedPlanningChat,
+        planningChatConfig: mergedPlanningChatConfig
+      };
+    });
   };
 
   if (!isLoaded) return null; // Prevent hydration mismatch
