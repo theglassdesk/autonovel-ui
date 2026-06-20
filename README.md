@@ -19,7 +19,8 @@ Export the project and run it using Node.js.
 4. **Environment Variables**:
    - Copy `.env.example` to `.env` (or `.env.local`).
    - Use this command `cp .env.example .env`
-   - If you plan to use Cloud inference (Gemini), add your `GEMINI_API_KEY` to the `.env` file.
+   - Update the environment vabiales that will be used.
+   - If you plan to use Cloud inference for example, (Gemini), add your `GEMINI_API_KEY` to the `.env` file.
 5. **Start the Development Server**:
    - Run `npm run dev`.
    - Open your browser to `http://localhost:3000`.
