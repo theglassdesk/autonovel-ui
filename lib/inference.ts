@@ -66,7 +66,7 @@ function parseJSONWithRepair(text: string) {
   } else {
     jsonStr = text.replace(/```(?:json)?/gi, '').trim();
   }
-  
+
   try {
     return JSON.parse(jsonStr);
   } catch (err) {
@@ -85,11 +85,11 @@ function parseJSONWithRepair(text: string) {
           // ignore
         }
       }
-      
+
       // Last resort: maybe it output an object instead of array?
       const objMatch = text.match(/\{[\s\S]*\}/);
       if (objMatch) {
-         return JSON5.parse(objMatch[0]);
+        return JSON5.parse(objMatch[0]);
       }
       throw err2;
     }
@@ -120,9 +120,29 @@ export async function generateTitle(apiUrl: string, model: string, systemPrompt:
 export async function generateCharacters(apiUrl: string, model: string, systemPrompt: string, synopsis: string, provider?: string) {
   const messages: Message[] = [
     { role: 'system', content: PLANNING_SYSTEM_PROMPT },
-    { role: 'user', content: `Based on the following synopsis, create a list of 3-5 main characters.\n\nSynopsis:\n${synopsis}\n\nFormat your response EXACTLY as a JSON array of objects with keys: "name", "role", and "description". Do not include Markdown blocks like \`\`\`json, just return the raw array.` }
+    {
+      role: 'user', content: `Based on the following synopsis, create a list of 8-10 main and supporting characters.
+
+Synopsis:
+${synopsis}
+
+For each character, you must provide the following details:
+- name: The character's full name.
+- role: Narrative role (e.g., Protagonist, Antagonist, Love Interest, Supporting).
+- description: A general 1-2 sentence summary of who they are.
+- identity: Core occupation, background, or social role.
+- physicalDescription: Age, height, hair, build, and overall style.
+- distinctFeatures: Distinct physical markers, scars, mannerisms, or voice traits.
+- coreValues: Guiding principles and what they stand for.
+- flaws: Main psychological or behavioral flaws.
+- fears: Deepest core fears or phobias.
+- want: The Want (External Goal - what they consciously strive for).
+- need: The Need (Internal Growth - what they must learn or accept to grow emotionally).
+- lie: The Lie (The false belief they hold about themselves or the world that holds them back).
+
+Format your response EXACTLY as a JSON array of objects with the exact keys: "name", "role", "description", "identity", "physicalDescription", "distinctFeatures", "coreValues", "flaws", "fears", "want", "need", "lie". Do not include Markdown blocks like \`\`\`json, just return the raw array.` }
   ];
-  const response = await generateChatCompletion(apiUrl, model, messages, 0.7, 1000, provider);
+  const response = await generateChatCompletion(apiUrl, model, messages, 0.7, 2500, provider);
   try {
     return parseJSONWithRepair(response);
   } catch (e) {
@@ -153,7 +173,7 @@ export async function generateOutline(apiUrl: string, model: string, systemPromp
 
 export async function continueOutline(apiUrl: string, model: string, systemPrompt: string, synopsis: string, characters: any[], currentOutline: any[], outlineTemplate: string, provider?: string) {
   const lastChapter = currentOutline.length > 0 ? currentOutline[currentOutline.length - 1].chapterNumber : 0;
-  
+
   let templateInstruction = '';
   if (outlineTemplate && outlineTemplate.trim() !== '') {
     templateInstruction = `\n\nCRITICAL STRUCTURAL TEMPLATE to follow:\n${outlineTemplate}\n\n`;
@@ -173,13 +193,13 @@ export async function continueOutline(apiUrl: string, model: string, systemPromp
 }
 
 export async function generateChapter(
-  apiUrl: string, 
-  model: string, 
-  systemPrompt: string, 
-  synopsis: string, 
-  outline: any[], 
-  chapterNumber: number, 
-  provider?: string, 
+  apiUrl: string,
+  model: string,
+  systemPrompt: string,
+  synopsis: string,
+  outline: any[],
+  chapterNumber: number,
+  provider?: string,
   guardrails?: { craft: string; antiSlop: string; antiPatterns: string },
   existingContent?: string,
   povType?: string,
@@ -188,7 +208,7 @@ export async function generateChapter(
 ) {
   const chapterDef = outline.find(c => c.chapterNumber === chapterNumber);
   if (!chapterDef) throw new Error("Chapter not found in outline");
-  
+
   let userPrompt = '';
 
   let povInstruction = '';
@@ -240,6 +260,6 @@ export async function generateChapter(
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userPrompt }
   ];
-  
+
   return generateChatCompletion(apiUrl, model, messages, 0.85, undefined, provider);
 }

@@ -8,6 +8,15 @@ export type Character = {
   name: string;
   description: string;
   role: string;
+  identity: string;
+  physicalDescription: string;
+  distinctFeatures: string;
+  coreValues: string;
+  flaws: string;
+  fears: string;
+  want: string;
+  need: string;
+  lie: string;
 };
 
 export type ChapterOutline = {
@@ -67,7 +76,7 @@ type StoreContextType = {
   updatePlanningChat: (messages: { role: 'user' | 'assistant'; content: string }[]) => void;
   updatePlanningChatConfig: (config: { projectId: string; modelId: string } | undefined) => void;
   getCurrentProject: () => NovelProject | undefined;
-  importState: (newState: Partial<AppState>) => void;
+  importState: (newState: AppState) => void;
 };
 
 const defaultSettings = {
@@ -122,6 +131,26 @@ function loadState(): AppState {
         if (typeof parsed.settings.autoSaveToDisk === 'undefined') parsed.settings.autoSaveToDisk = defaultSettings.autoSaveToDisk;
       }
       if (!parsed.planningChat) parsed.planningChat = [];
+      if (parsed.projects) {
+        parsed.projects = parsed.projects.map((p: any) => ({
+          ...p,
+          characters: (p.characters || []).map((c: any) => ({
+            id: c.id || crypto.randomUUID(),
+            name: c.name || '',
+            description: c.description || '',
+            role: c.role || '',
+            identity: c.identity || '',
+            physicalDescription: c.physicalDescription || '',
+            distinctFeatures: c.distinctFeatures || '',
+            coreValues: c.coreValues || '',
+            flaws: c.flaws || '',
+            fears: c.fears || '',
+            want: c.want || '',
+            need: c.need || '',
+            lie: c.lie || '',
+          }))
+        }));
+      }
       return parsed;
     }
   } catch (e) {
@@ -153,7 +182,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         fetch('/api/save', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ projects: state.projects })
+          body: JSON.stringify(state)
         }).catch(err => console.error('Auto-save to disk failed:', err));
       }
     }
@@ -224,33 +253,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return state.projects.find(p => p.id === state.currentProjectId);
   };
 
-  const importState = (newState: Partial<AppState>) => {
-    setState(prev => {
-      const mergedProjects = newState.projects || prev.projects;
-      const mergedSettings = newState.settings 
-        ? { ...defaultSettings, ...prev.settings, ...newState.settings }
-        : prev.settings;
-      
-      let mergedCurrentProjectId = prev.currentProjectId;
-      if (newState.currentProjectId !== undefined) {
-        mergedCurrentProjectId = newState.currentProjectId;
-      }
-      if (mergedCurrentProjectId && !mergedProjects.some(p => p.id === mergedCurrentProjectId)) {
-        mergedCurrentProjectId = mergedProjects.length > 0 ? mergedProjects[0].id : null;
-      }
-
-      const mergedPlanningChat = newState.planningChat !== undefined ? newState.planningChat : prev.planningChat;
-      const mergedPlanningChatConfig = newState.planningChatConfig !== undefined ? newState.planningChatConfig : prev.planningChatConfig;
-
-      return {
-        ...prev,
-        projects: mergedProjects,
-        settings: mergedSettings,
-        currentProjectId: mergedCurrentProjectId,
-        planningChat: mergedPlanningChat,
-        planningChatConfig: mergedPlanningChatConfig
-      };
-    });
+  const importState = (newState: AppState) => {
+    setState(newState);
   };
 
   if (!isLoaded) return null; // Prevent hydration mismatch

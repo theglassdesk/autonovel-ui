@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useStore } from '@/lib/store';
 import { generateSynopsis, generateCharacters, generateOutline, continueOutline, generateChapter, generateTitle } from '@/lib/inference';
-import { Loader2, Play, Check, ChevronRight, FileText, Users, ListTree, BookOpen, PenTool, Wand2, Download, Plus, Trash2, MessageSquare, Layers } from 'lucide-react';
+import { Loader2, Play, Check, ChevronRight, ChevronDown, FileText, Users, ListTree, BookOpen, PenTool, Wand2, Download, Plus, Trash2, MessageSquare, Layers } from 'lucide-react';
 import { PlanningTab } from './PlanningTab';
 
 export function Workspace() {
@@ -13,6 +13,14 @@ export function Workspace() {
   const [activeTab, setActiveTab] = useState<'foundation' | 'drafting' | 'planning'>('foundation');
   const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [expandedChars, setExpandedChars] = useState<Record<string, boolean>>({});
+
+  const toggleCharExpand = (charId: string) => {
+    setExpandedChars(prev => ({
+      ...prev,
+      [charId]: !prev[charId]
+    }));
+  };
 
   if (!project) {
     return (
@@ -50,7 +58,16 @@ export function Workspace() {
         id: c.id || crypto.randomUUID(),
         name: c.name || '',
         role: c.role || '',
-        description: c.description || ''
+        description: c.description || '',
+        identity: c.identity || '',
+        physicalDescription: c.physicalDescription || '',
+        distinctFeatures: c.distinctFeatures || '',
+        coreValues: c.coreValues || '',
+        flaws: c.flaws || '',
+        fears: c.fears || '',
+        want: c.want || '',
+        need: c.need || '',
+        lie: c.lie || '',
       }));
       updateProject(project.id, { characters: charactersWithIds });
     } catch (e: any) {
@@ -352,7 +369,21 @@ export function Workspace() {
                       onClick={() => {
                         const newChar = [
                           ...project.characters,
-                          { id: crypto.randomUUID(), name: '', role: 'Supporting', description: '' }
+                          {
+                            id: crypto.randomUUID(),
+                            name: '',
+                            role: 'Supporting',
+                            description: '',
+                            identity: '',
+                            physicalDescription: '',
+                            distinctFeatures: '',
+                            coreValues: '',
+                            flaws: '',
+                            fears: '',
+                            want: '',
+                            need: '',
+                            lie: ''
+                          }
                         ];
                         updateProject(project.id, { characters: newChar });
                       }}
@@ -379,7 +410,21 @@ export function Workspace() {
                       <button
                         onClick={() => {
                           updateProject(project.id, {
-                            characters: [{ id: crypto.randomUUID(), name: '', role: 'Protagonist', description: '' }]
+                            characters: [{
+                              id: crypto.randomUUID(),
+                              name: '',
+                              role: 'Protagonist',
+                              description: '',
+                              identity: '',
+                              physicalDescription: '',
+                              distinctFeatures: '',
+                              coreValues: '',
+                              flaws: '',
+                              fears: '',
+                              want: '',
+                              need: '',
+                              lie: ''
+                            }]
                           });
                         }}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-white/50 hover:bg-white/80 border border-white/60 text-slate-800 text-xs font-medium rounded-lg transition-colors shadow-sm"
@@ -394,16 +439,25 @@ export function Workspace() {
                       {project.characters.map((c, i) => (
                         <div key={c.id || i} className="p-4 border border-white/40 rounded-lg bg-white/30 shadow-sm transition-all hover:bg-white/40">
                           <div className="flex justify-between items-center mb-1 gap-4">
-                            <input
-                              className="font-semibold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-500 outline-none w-1/2 px-1 py-0.5 rounded transition-colors"
-                              value={c.name}
-                              placeholder="Character Name"
-                              onChange={(e) => {
-                                const newChar = [...project.characters];
-                                newChar[i] = { ...newChar[i], name: e.target.value };
-                                updateProject(project.id, { characters: newChar });
-                              }}
-                            />
+                            <div className="flex items-center gap-2 flex-1">
+                              <button
+                                onClick={() => toggleCharExpand(c.id)}
+                                className="p-1 text-slate-500 hover:text-indigo-600 hover:bg-white/40 rounded transition-colors"
+                                title={expandedChars[c.id] ? "Collapse Details" : "Expand Details"}
+                              >
+                                {expandedChars[c.id] ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                              </button>
+                              <input
+                                className="font-semibold text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-500 outline-none w-full px-1 py-0.5 rounded transition-colors"
+                                value={c.name}
+                                placeholder="Character Name"
+                                onChange={(e) => {
+                                  const newChar = [...project.characters];
+                                  newChar[i] = { ...newChar[i], name: e.target.value };
+                                  updateProject(project.id, { characters: newChar });
+                                }}
+                              />
+                            </div>
                             <div className="flex items-center gap-2">
                               <input
                                 className="text-xs font-medium text-indigo-700 bg-indigo-100/80 px-2.5 py-1 rounded uppercase tracking-wider outline-none border border-transparent focus:border-indigo-300 w-28 text-center transition-colors placeholder:text-indigo-400 font-sans"
@@ -430,20 +484,188 @@ export function Workspace() {
                           <textarea
                             className="text-sm text-slate-700 bg-transparent w-full resize-none h-16 outline-none mt-2 border border-transparent hover:border-slate-200 focus:border-indigo-500/30 focus:bg-white/20 p-1 rounded transition-all"
                             value={c.description}
-                            placeholder="Character description, background, and traits..."
+                            placeholder="Brief character summary or role overview..."
                             onChange={(e) => {
                               const newChar = [...project.characters];
                               newChar[i] = { ...newChar[i], description: e.target.value };
                               updateProject(project.id, { characters: newChar });
                             }}
                           />
+                          
+                          {expandedChars[c.id] && (
+                            <div className="mt-4 pt-4 border-t border-white/20 grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-1 duration-200">
+                              {/* Profile & Appearance */}
+                              <div className="space-y-3 bg-white/10 p-3 rounded-lg border border-white/10">
+                                <h4 className="text-xs font-bold text-indigo-800 tracking-wide uppercase flex items-center gap-1">
+                                  <Users size={12} className="text-indigo-600" />
+                                  Profile & Appearance
+                                </h4>
+                                
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Identity</label>
+                                  <textarea
+                                    className="text-xs text-slate-800 bg-white/40 w-full resize-none h-14 outline-none border border-white/20 focus:border-indigo-500 focus:bg-white/80 p-1.5 rounded transition-all"
+                                    value={c.identity || ''}
+                                    placeholder="Occupation, core identity, background..."
+                                    onChange={(e) => {
+                                      const newChar = [...project.characters];
+                                      newChar[i] = { ...newChar[i], identity: e.target.value };
+                                      updateProject(project.id, { characters: newChar });
+                                    }}
+                                  />
+                                </div>
+
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Physical Description</label>
+                                  <textarea
+                                    className="text-xs text-slate-800 bg-white/40 w-full resize-none h-14 outline-none border border-white/20 focus:border-indigo-500 focus:bg-white/80 p-1.5 rounded transition-all"
+                                    value={c.physicalDescription || ''}
+                                    placeholder="Age, height, build, style..."
+                                    onChange={(e) => {
+                                      const newChar = [...project.characters];
+                                      newChar[i] = { ...newChar[i], physicalDescription: e.target.value };
+                                      updateProject(project.id, { characters: newChar });
+                                    }}
+                                  />
+                                </div>
+
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Distinct Features</label>
+                                  <textarea
+                                    className="text-xs text-slate-800 bg-white/40 w-full resize-none h-14 outline-none border border-white/20 focus:border-indigo-500 focus:bg-white/80 p-1.5 rounded transition-all"
+                                    value={c.distinctFeatures || ''}
+                                    placeholder="Scars, mannerisms, key physical traits..."
+                                    onChange={(e) => {
+                                      const newChar = [...project.characters];
+                                      newChar[i] = { ...newChar[i], distinctFeatures: e.target.value };
+                                      updateProject(project.id, { characters: newChar });
+                                    }}
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Psychology & Beliefs */}
+                              <div className="space-y-3 bg-white/10 p-3 rounded-lg border border-white/10">
+                                <h4 className="text-xs font-bold text-teal-800 tracking-wide uppercase flex items-center gap-1">
+                                  <PenTool size={12} className="text-teal-600" />
+                                  Psychology & Beliefs
+                                </h4>
+                                
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Core Values</label>
+                                  <textarea
+                                    className="text-xs text-slate-800 bg-white/40 w-full resize-none h-14 outline-none border border-white/20 focus:border-indigo-500 focus:bg-white/80 p-1.5 rounded transition-all"
+                                    value={c.coreValues || ''}
+                                    placeholder="Guiding principles, beliefs..."
+                                    onChange={(e) => {
+                                      const newChar = [...project.characters];
+                                      newChar[i] = { ...newChar[i], coreValues: e.target.value };
+                                      updateProject(project.id, { characters: newChar });
+                                    }}
+                                  />
+                                </div>
+
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Flaws</label>
+                                  <textarea
+                                    className="text-xs text-slate-800 bg-white/40 w-full resize-none h-14 outline-none border border-white/20 focus:border-indigo-500 focus:bg-white/80 p-1.5 rounded transition-all"
+                                    value={c.flaws || ''}
+                                    placeholder="Core flaws, personality weaknesses..."
+                                    onChange={(e) => {
+                                      const newChar = [...project.characters];
+                                      newChar[i] = { ...newChar[i], flaws: e.target.value };
+                                      updateProject(project.id, { characters: newChar });
+                                    }}
+                                  />
+                                </div>
+
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Fears</label>
+                                  <textarea
+                                    className="text-xs text-slate-800 bg-white/40 w-full resize-none h-14 outline-none border border-white/20 focus:border-indigo-500 focus:bg-white/80 p-1.5 rounded transition-all"
+                                    value={c.fears || ''}
+                                    placeholder="Deepest fears or phobias..."
+                                    onChange={(e) => {
+                                      const newChar = [...project.characters];
+                                      newChar[i] = { ...newChar[i], fears: e.target.value };
+                                      updateProject(project.id, { characters: newChar });
+                                    }}
+                                  />
+                                </div>
+                              </div>
+
+                              {/* Character Arc */}
+                              <div className="space-y-3 bg-white/10 p-3 rounded-lg border border-white/10">
+                                <h4 className="text-xs font-bold text-rose-800 tracking-wide uppercase flex items-center gap-1">
+                                  <Layers size={12} className="text-rose-600" />
+                                  Character Arc
+                                </h4>
+                                
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">The Want (External Goal)</label>
+                                  <textarea
+                                    className="text-xs text-slate-800 bg-white/40 w-full resize-none h-14 outline-none border border-white/20 focus:border-indigo-500 focus:bg-white/80 p-1.5 rounded transition-all"
+                                    value={c.want || ''}
+                                    placeholder="What they think they want..."
+                                    onChange={(e) => {
+                                      const newChar = [...project.characters];
+                                      newChar[i] = { ...newChar[i], want: e.target.value };
+                                      updateProject(project.id, { characters: newChar });
+                                    }}
+                                  />
+                                </div>
+
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">The Need (Internal Growth)</label>
+                                  <textarea
+                                    className="text-xs text-slate-800 bg-white/40 w-full resize-none h-14 outline-none border border-white/20 focus:border-indigo-500 focus:bg-white/80 p-1.5 rounded transition-all"
+                                    value={c.need || ''}
+                                    placeholder="What they actually need to learn..."
+                                    onChange={(e) => {
+                                      const newChar = [...project.characters];
+                                      newChar[i] = { ...newChar[i], need: e.target.value };
+                                      updateProject(project.id, { characters: newChar });
+                                    }}
+                                  />
+                                </div>
+
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">The Lie</label>
+                                  <textarea
+                                    className="text-xs text-slate-800 bg-white/40 w-full resize-none h-14 outline-none border border-white/20 focus:border-indigo-500 focus:bg-white/80 p-1.5 rounded transition-all"
+                                    value={c.lie || ''}
+                                    placeholder="The false belief holding them back..."
+                                    onChange={(e) => {
+                                      const newChar = [...project.characters];
+                                      newChar[i] = { ...newChar[i], lie: e.target.value };
+                                      updateProject(project.id, { characters: newChar });
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                       <button
                         onClick={() => {
                           const newChar = [
                             ...project.characters,
-                            { id: crypto.randomUUID(), name: '', role: 'Supporting', description: '' }
+                            {
+                              id: crypto.randomUUID(),
+                              name: '',
+                              role: 'Supporting',
+                              description: '',
+                              identity: '',
+                              physicalDescription: '',
+                              distinctFeatures: '',
+                              coreValues: '',
+                              flaws: '',
+                              fears: '',
+                              want: '',
+                              need: '',
+                              lie: ''
+                            }
                           ];
                           updateProject(project.id, { characters: newChar });
                         }}
