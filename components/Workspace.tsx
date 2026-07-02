@@ -82,7 +82,18 @@ export function Workspace() {
     setError(null);
     try {
       const endpointURL = state.settings.draftingProvider === 'local' ? state.settings.apiUrl : '/api';
-      const result = await generateOutline(endpointURL, state.settings.draftingModel, state.settings.systemPrompt, project.synopsis, project.characters, project.targetChapterCount || 10, project.outlineTemplate || '', state.settings.draftingProvider);
+      const result = await generateOutline(
+        endpointURL,
+        state.settings.draftingModel,
+        state.settings.systemPrompt,
+        project.synopsis,
+        project.characters,
+        project.targetChapterCount || 10,
+        project.outlineTemplate || '',
+        state.settings.draftingProvider,
+        project.povType || 'Third Person Limited',
+        project.dualPov
+      );
 
       // Initialize chapter data based on outline
       const newChapters = result.map((c: any) => ({
@@ -105,7 +116,18 @@ export function Workspace() {
     setError(null);
     try {
       const endpointURL = state.settings.draftingProvider === 'local' ? state.settings.apiUrl : '/api';
-      const newOutlineData = await continueOutline(endpointURL, state.settings.draftingModel, state.settings.systemPrompt, project.synopsis, project.characters, project.outline, project.outlineTemplate || '', state.settings.draftingProvider);
+      const newOutlineData = await continueOutline(
+        endpointURL,
+        state.settings.draftingModel,
+        state.settings.systemPrompt,
+        project.synopsis,
+        project.characters,
+        project.outline,
+        project.outlineTemplate || '',
+        state.settings.draftingProvider,
+        project.povType || 'Third Person Limited',
+        project.dualPov
+      );
 
       const combinedOutline = [...project.outline, ...newOutlineData];
 
@@ -701,6 +723,18 @@ export function Workspace() {
                               <option value="Third Person Limited">Third Person Limited (he/she)</option>
                               <option value="Third Person Omniscient">Third Person Omniscient</option>
                             </select>
+                            <div className="flex items-center gap-2 mt-2 select-none cursor-pointer">
+                              <input
+                                type="checkbox"
+                                id="dualPov"
+                                checked={!!project.dualPov}
+                                onChange={(e) => updateProject(project.id, { dualPov: e.target.checked })}
+                                className="h-4 w-4 rounded border-white/40 text-indigo-600 bg-white/50 focus:ring-indigo-500/20 cursor-pointer"
+                              />
+                              <label htmlFor="dualPov" className="text-xs font-medium text-slate-700 cursor-pointer">
+                                Dual POV (Protagonist + Love Interest)
+                              </label>
+                            </div>
                           </div>
                         </div>
                         <div>

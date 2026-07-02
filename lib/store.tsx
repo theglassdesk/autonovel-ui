@@ -45,6 +45,7 @@ export type NovelProject = {
   outlineTemplate?: string;
   targetChapterCount?: number;
   povType?: string;
+  dualPov?: boolean;
 };
 
 export type AppState = {

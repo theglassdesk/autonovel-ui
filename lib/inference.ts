@@ -153,15 +153,46 @@ Format your response EXACTLY as a JSON array of 8 to 10 objects with the exact k
   }
 }
 
-export async function generateOutline(apiUrl: string, model: string, systemPrompt: string, synopsis: string, characters: any[], targetChapterCount: number, outlineTemplate: string, provider?: string) {
+export async function generateOutline(
+  apiUrl: string,
+  model: string,
+  systemPrompt: string,
+  synopsis: string,
+  characters: any[],
+  targetChapterCount: number,
+  outlineTemplate: string,
+  provider?: string,
+  povType?: string,
+  dualPov?: boolean
+) {
   let templateInstruction = '';
   if (outlineTemplate && outlineTemplate.trim() !== '') {
     templateInstruction = `\n\nCRITICAL STRUCTURAL TEMPLATE to follow:\n${outlineTemplate}\n\n`;
   }
 
+  let povInstruction = '';
+  if (povType) {
+    povInstruction += `The novel should be written in: ${povType}.\n`;
+  }
+  if (dualPov) {
+    povInstruction += `The novel MUST use a DUAL POV (Point of View) structure. The chapter POVs MUST alternate between the Protagonist (narrative role: Protagonist) and the Love Interest (narrative role: Love Interest). Ensure that each chapter's "pov" field specifies the exact name of the character whose perspective the chapter is from (either the protagonist or the love interest), alternating in a balanced manner. Do not use any other character POVs.\n`;
+  } else {
+    povInstruction += `Specify the character name whose perspective the chapter is from in the "pov" field.\n`;
+  }
+
   const messages: Message[] = [
     { role: 'system', content: PLANNING_SYSTEM_PROMPT },
-    { role: 'user', content: `Given the synopsis and characters, outline the chapters for the novel. You MUST generate exactly ${targetChapterCount} chapters.\n\nSynopsis:\n${synopsis}\n\nCharacters:\n${JSON.stringify(characters)}${templateInstruction}\n\nFormat your response EXACTLY as a JSON array of objects with keys: "chapterNumber" (number), "title" (string), "summary" (string), "pov" (string - the name of the character whose perspective the chapter is from). Just the raw array, no markdown blocks.` }
+    { role: 'user', content: `Given the synopsis and characters, outline the chapters for the novel. You MUST generate exactly ${targetChapterCount} chapters.
+
+${povInstruction}
+
+Synopsis:
+${synopsis}
+
+Characters:
+${JSON.stringify(characters)}${templateInstruction}
+
+Format your response EXACTLY as a JSON array of objects with keys: "chapterNumber" (number), "title" (string), "summary" (string), "pov" (string - the name of the character whose perspective the chapter is from). Just the raw array, no markdown blocks.` }
   ];
   // passing -1 or high token limit if possible, or just omitting to let local model use max
   const response = await generateChatCompletion(apiUrl, model, messages, 0.7, undefined, provider);
@@ -173,7 +204,18 @@ export async function generateOutline(apiUrl: string, model: string, systemPromp
   }
 }
 
-export async function continueOutline(apiUrl: string, model: string, systemPrompt: string, synopsis: string, characters: any[], currentOutline: any[], outlineTemplate: string, provider?: string) {
+export async function continueOutline(
+  apiUrl: string,
+  model: string,
+  systemPrompt: string,
+  synopsis: string,
+  characters: any[],
+  currentOutline: any[],
+  outlineTemplate: string,
+  provider?: string,
+  povType?: string,
+  dualPov?: boolean
+) {
   const lastChapter = currentOutline.length > 0 ? currentOutline[currentOutline.length - 1].chapterNumber : 0;
 
   let templateInstruction = '';
@@ -181,9 +223,32 @@ export async function continueOutline(apiUrl: string, model: string, systemPromp
     templateInstruction = `\n\nCRITICAL STRUCTURAL TEMPLATE to follow:\n${outlineTemplate}\n\n`;
   }
 
+  let povInstruction = '';
+  if (povType) {
+    povInstruction += `The novel should be written in: ${povType}.\n`;
+  }
+  if (dualPov) {
+    povInstruction += `The novel MUST use a DUAL POV (Point of View) structure. The chapter POVs MUST alternate between the Protagonist (narrative role: Protagonist) and the Love Interest (narrative role: Love Interest). Ensure that each chapter's "pov" field specifies the exact name of the character whose perspective the chapter is from (either the protagonist or the love interest), alternating in a balanced manner. Do not use any other character POVs.\n`;
+  } else {
+    povInstruction += `Specify the character name whose perspective the chapter is from in the "pov" field.\n`;
+  }
+
   const messages: Message[] = [
     { role: 'system', content: PLANNING_SYSTEM_PROMPT },
-    { role: 'user', content: `Given the synopsis and characters, continue outlining the chapters for the novel starting from Chapter ${lastChapter + 1}. Aim for 5-10 MORE chapters.\n\nSynopsis:\n${synopsis}\n\nCharacters:\n${JSON.stringify(characters)}${templateInstruction}\n\nExisting Outline (Chapters 1 to ${lastChapter}):\n${JSON.stringify(currentOutline)}\n\nFormat your response EXACTLY as a JSON array of objects with keys: "chapterNumber" (number), "title" (string), "summary" (string), "pov" (string - the name of the character whose perspective the chapter is from). Just the raw array, no markdown blocks.` }
+    { role: 'user', content: `Given the synopsis and characters, continue outlining the chapters for the novel starting from Chapter ${lastChapter + 1}. Aim for 5-10 MORE chapters.
+
+${povInstruction}
+
+Synopsis:
+${synopsis}
+
+Characters:
+${JSON.stringify(characters)}${templateInstruction}
+
+Existing Outline (Chapters 1 to ${lastChapter}):
+${JSON.stringify(currentOutline)}
+
+Format your response EXACTLY as a JSON array of objects with keys: "chapterNumber" (number), "title" (string), "summary" (string), "pov" (string - the name of the character whose perspective the chapter is from). Just the raw array, no markdown blocks.` }
   ];
   const response = await generateChatCompletion(apiUrl, model, messages, 0.7, undefined, provider);
   try {
