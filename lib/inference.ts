@@ -121,7 +121,9 @@ export async function generateCharacters(apiUrl: string, model: string, systemPr
   const messages: Message[] = [
     { role: 'system', content: PLANNING_SYSTEM_PROMPT },
     {
-      role: 'user', content: `Based on the following synopsis, create a list of 8-10 main and supporting characters.
+      role: 'user', content: `Based on the following synopsis, create a list of EXACTLY 8 to 10 main and supporting characters.
+
+Since the synopsis only mentions a few characters by name, you MUST invent additional characters (such as Wyatt's unnamed brothers, ranch hands, Mariposa townspeople, or local rivals) to build out the story world and bring the total character count to between 8 and 10.
 
 Synopsis:
 ${synopsis}
@@ -140,9 +142,9 @@ For each character, you must provide the following details:
 - need: The Need (Internal Growth - what they must learn or accept to grow emotionally).
 - lie: The Lie (The false belief they hold about themselves or the world that holds them back).
 
-Format your response EXACTLY as a JSON array of objects with the exact keys: "name", "role", "description", "identity", "physicalDescription", "distinctFeatures", "coreValues", "flaws", "fears", "want", "need", "lie". Do not include Markdown blocks like \`\`\`json, just return the raw array.` }
+Format your response EXACTLY as a JSON array of 8 to 10 objects with the exact keys: "name", "role", "description", "identity", "physicalDescription", "distinctFeatures", "coreValues", "flaws", "fears", "want", "need", "lie". Do not include Markdown blocks like \`\`\`json, just return the raw array.` }
   ];
-  const response = await generateChatCompletion(apiUrl, model, messages, 0.7, 2500, provider);
+  const response = await generateChatCompletion(apiUrl, model, messages, 0.7, 4000, provider);
   try {
     return parseJSONWithRepair(response);
   } catch (e) {
