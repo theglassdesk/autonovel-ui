@@ -1,19 +1,33 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { generateSynopsis, generateCharacters, generateOutline, continueOutline, generateChapter, generateTitle } from '@/lib/inference';
-import { Loader2, Play, Check, ChevronRight, ChevronDown, FileText, Users, ListTree, BookOpen, PenTool, Wand2, Download, Plus, Trash2, MessageSquare, Layers } from 'lucide-react';
-import { PlanningTab } from './PlanningTab';
+import { Loader2, Play, Check, ChevronRight, ChevronDown, FileText, Users, ListTree, BookOpen, PenTool, Wand2, Download, Plus, Trash2, MessageSquare, Layers, User } from 'lucide-react';
 
 export function Workspace() {
   const { state, getCurrentProject, updateProject } = useStore();
   const project = getCurrentProject();
   const [loading, setLoading] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'foundation' | 'drafting' | 'planning'>('foundation');
+  const [activeTab, setActiveTab] = useState<'foundation' | 'drafting'>('foundation');
   const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedChars, setExpandedChars] = useState<Record<string, boolean>>({});
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // Scroll main view back to top on tab changes
+  useEffect(() => {
+    if (contentRef.current) {
+      contentRef.current.scrollTop = 0;
+    }
+  }, [activeTab]);
+
+  // Auto-select first chapter when entering drafting mode if none selected yet
+  useEffect(() => {
+    if (activeTab === 'drafting' && !selectedChapter && project?.outline && project.outline.length > 0) {
+      setSelectedChapter(project.outline[0].chapterNumber);
+    }
+  }, [activeTab, project?.outline, selectedChapter]);
 
   const toggleCharExpand = (charId: string) => {
     setExpandedChars(prev => ({
@@ -34,12 +48,17 @@ export function Workspace() {
     );
   }
 
+  const series = project.seriesId ? state.series.find(s => s.id === project.seriesId) : undefined;
+  const effectiveSystemPrompt = project.systemPrompt || series?.systemPrompt || state.settings.systemPrompt;
+  const effectivePenName = project.penName || series?.penName;
+  const seriesContext = series ? { premise: series.premise, penName: effectivePenName } : { penName: effectivePenName };
+
   const handleGenerateSynopsis = async () => {
     setLoading('synopsis');
     setError(null);
     try {
       const endpointURL = state.settings.draftingProvider === 'local' ? state.settings.apiUrl : '/api';
-      const result = await generateSynopsis(endpointURL, state.settings.draftingModel, state.settings.systemPrompt, project.title, project.premise, state.settings.draftingProvider);
+      const result = await generateSynopsis(endpointURL, state.settings.draftingModel, effectiveSystemPrompt, project.title, project.premise, state.settings.draftingProvider, seriesContext);
       updateProject(project.id, { synopsis: result });
     } catch (e: any) {
       setError(e.message);
@@ -53,7 +72,7 @@ export function Workspace() {
     setError(null);
     try {
       const endpointURL = state.settings.draftingProvider === 'local' ? state.settings.apiUrl : '/api';
-      const result = await generateCharacters(endpointURL, state.settings.draftingModel, state.settings.systemPrompt, project.synopsis, state.settings.draftingProvider);
+      const result = await generateCharacters(endpointURL, state.settings.draftingModel, effectiveSystemPrompt, project.synopsis, state.settings.draftingProvider, seriesContext);
       const charactersWithIds = result.map((c: any) => ({
         id: c.id || crypto.randomUUID(),
         name: c.name || '',
@@ -85,14 +104,15 @@ export function Workspace() {
       const result = await generateOutline(
         endpointURL,
         state.settings.draftingModel,
-        state.settings.systemPrompt,
+        effectiveSystemPrompt,
         project.synopsis,
         project.characters,
         project.targetChapterCount || 10,
         project.outlineTemplate || '',
         state.settings.draftingProvider,
         project.povType || 'Third Person Limited',
-        project.dualPov
+        project.dualPov,
+        seriesContext
       );
 
       // Initialize chapter data based on outline
@@ -119,14 +139,15 @@ export function Workspace() {
       const newOutlineData = await continueOutline(
         endpointURL,
         state.settings.draftingModel,
-        state.settings.systemPrompt,
+        effectiveSystemPrompt,
         project.synopsis,
         project.characters,
         project.outline,
         project.outlineTemplate || '',
         state.settings.draftingProvider,
         project.povType || 'Third Person Limited',
-        project.dualPov
+        project.dualPov,
+        seriesContext
       );
 
       const combinedOutline = [...project.outline, ...newOutlineData];
@@ -183,7 +204,7 @@ export function Workspace() {
       const result = await generateChapter(
         endpointURL,
         state.settings.draftingModel,
-        state.settings.systemPrompt,
+        effectiveSystemPrompt,
         project.synopsis,
         project.outline,
         chapNum,
@@ -192,7 +213,8 @@ export function Workspace() {
         existingContent,
         project.povType || 'Third Person Limited',
         project.characters,
-        previousChapterData
+        previousChapterData,
+        seriesContext
       );
       updateProject(project.id, {
         chapters: project.chapters.map(c => c.chapterNumber === chapNum ? { ...c, content: result, status: 'drafted' } : c)
@@ -212,7 +234,7 @@ export function Workspace() {
     setError(null);
     try {
       const endpointURL = state.settings.draftingProvider === 'local' ? state.settings.apiUrl : '/api';
-      const result = await generateTitle(endpointURL, state.settings.draftingModel, state.settings.systemPrompt, project.synopsis, state.settings.draftingProvider);
+      const result = await generateTitle(endpointURL, state.settings.draftingModel, effectiveSystemPrompt, project.synopsis, state.settings.draftingProvider, seriesContext);
       updateProject(project.id, { title: result });
     } catch (e: any) {
       setError(e.message);
@@ -305,12 +327,6 @@ export function Workspace() {
             >
               <PenTool size={14} /> Drafting
             </button>
-            <button
-              onClick={() => setActiveTab('planning')}
-              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === 'planning' ? 'bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-sm' : 'text-violet-600 hover:text-violet-900 hover:bg-violet-100/30'}`}
-            >
-              <MessageSquare size={14} /> Planning
-            </button>
           </div>
         </div>
       </div>
@@ -322,10 +338,44 @@ export function Workspace() {
       )}
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto px-6 py-8">
+      <div ref={contentRef} className="flex-1 overflow-y-auto px-6 py-8">
 
         {activeTab === 'foundation' && (
           <div className="max-w-3xl mx-auto space-y-12 pb-12">
+
+            {/* Book Settings (Pen Name & Prompt) */}
+            <section className="space-y-4 bg-white/40 p-4 rounded-xl border border-white/50 shadow-sm">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-6 h-6 rounded bg-slate-100 text-slate-500 flex items-center justify-center"><User size={14} /></div>
+                <h3 className="font-medium text-slate-900">Book Settings</h3>
+                {project.seriesId && (
+                  <span className="ml-2 text-xs px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full font-medium">
+                    Part of a Series
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Pen Name (Optional override)</label>
+                  <input
+                    type="text"
+                    value={project.penName || ''}
+                    onChange={e => updateProject(project.id, { penName: e.target.value })}
+                    placeholder={project.seriesId ? "Inheriting from series..." : "e.g. J.K. Rowling"}
+                    className="w-full text-sm p-2 border border-white/40 rounded-lg bg-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">System Prompt Override</label>
+                  <textarea
+                    value={project.systemPrompt || ''}
+                    onChange={e => updateProject(project.id, { systemPrompt: e.target.value })}
+                    placeholder={project.seriesId ? "Inheriting from series..." : "Override global system prompt here..."}
+                    className="w-full h-20 text-sm p-2 border border-white/40 rounded-lg bg-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-none"
+                  />
+                </div>
+              </div>
+            </section>
 
             {/* Step 1: Premise */}
             <section className="space-y-3">
@@ -960,14 +1010,6 @@ export function Workspace() {
             <button onClick={() => setActiveTab('foundation')} className="mt-4 text-sm text-indigo-600 font-medium hover:underline">Go to Foundation</button>
           </div>
         )}
-
-        {/* Planning Tab */}
-        {activeTab === 'planning' && (
-          <div className="h-full">
-            <PlanningTab />
-          </div>
-        )}
-
       </div>
     </div>
   );

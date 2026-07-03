@@ -3,6 +3,18 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 
 // --- Types ---
+export type ChatMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
+export type ChatSession = {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
+  contextId?: string; // seriesId or projectId
+  updatedAt: number;
+};
 export type Character = {
   id: string;
   name: string;
@@ -34,6 +46,15 @@ export type ChapterData = {
   status: 'pending' | 'generating' | 'drafted' | 'revised';
 };
 
+export type SeriesProject = {
+  id: string;
+  title: string;
+  premise: string;
+  penName?: string;
+  systemPrompt?: string;
+  bookIds: string[];
+};
+
 export type NovelProject = {
   id: string;
   title: string;
@@ -46,13 +67,19 @@ export type NovelProject = {
   targetChapterCount?: number;
   povType?: string;
   dualPov?: boolean;
+  seriesId?: string;
+  penName?: string;
+  systemPrompt?: string;
 };
 
 export type AppState = {
+  series: SeriesProject[];
   projects: NovelProject[];
   currentProjectId: string | null;
-  planningChat?: { role: 'user' | 'assistant'; content: string }[];
-  planningChatConfig?: { projectId: string; modelId: string };
+  currentSeriesId: string | null;
+  currentChatId: string | null;
+  currentView: 'project' | 'series' | 'chat';
+  chatSessions: ChatSession[];
   settings: {
     draftingProvider: 'local' | 'gemini' | 'anthropic' | 'openrouter';
     draftingModel: string;
@@ -69,14 +96,21 @@ export type AppState = {
 
 type StoreContextType = {
   state: AppState;
-  createProject: (title: string, premise: string) => NovelProject;
+  createSeries: (title: string, premise: string) => SeriesProject;
+  deleteSeries: (id: string) => void;
+  setCurrentSeries: (id: string) => void;
+  updateSeries: (id: string, updates: Partial<SeriesProject>) => void;
+  createProject: (title: string, premise: string, seriesId?: string) => NovelProject;
   deleteProject: (id: string) => void;
   setCurrentProject: (id: string) => void;
   updateProject: (id: string, updates: Partial<NovelProject>) => void;
+  createChatSession: () => ChatSession;
+  deleteChatSession: (id: string) => void;
+  setCurrentChatSession: (id: string) => void;
+  updateChatSession: (id: string, updates: Partial<ChatSession>) => void;
   updateSettings: (updates: Partial<AppState['settings']>) => void;
-  updatePlanningChat: (messages: { role: 'user' | 'assistant'; content: string }[]) => void;
-  updatePlanningChatConfig: (config: { projectId: string; modelId: string } | undefined) => void;
   getCurrentProject: () => NovelProject | undefined;
+  getCurrentSeries: () => SeriesProject | undefined;
   importState: (newState: AppState) => void;
 };
 
@@ -96,7 +130,7 @@ const defaultSettings = {
 const StoreContext = createContext<StoreContextType | null>(null);
 
 function loadState(): AppState {
-  if (typeof window === 'undefined') return { projects: [], currentProjectId: null, planningChat: [], settings: defaultSettings };
+  if (typeof window === 'undefined') return { series: [], projects: [], chatSessions: [], currentChatId: null, currentProjectId: null, currentSeriesId: null, currentView: 'project', settings: defaultSettings };
   try {
     const saved = localStorage.getItem('autonovel_state');
     if (saved) {
@@ -131,7 +165,23 @@ function loadState(): AppState {
         if (typeof parsed.settings.antiPatterns === 'undefined') parsed.settings.antiPatterns = defaultSettings.antiPatterns;
         if (typeof parsed.settings.autoSaveToDisk === 'undefined') parsed.settings.autoSaveToDisk = defaultSettings.autoSaveToDisk;
       }
-      if (!parsed.planningChat) parsed.planningChat = [];
+      if (!parsed.series) parsed.series = [];
+      if (!parsed.chatSessions) parsed.chatSessions = [];
+      
+      // Migrate old planningChat to a ChatSession
+      if (parsed.planningChat && parsed.planningChat.length > 0) {
+        const oldChatId = crypto.randomUUID();
+        parsed.chatSessions.push({
+          id: oldChatId,
+          title: 'Legacy Chat',
+          messages: parsed.planningChat,
+          updatedAt: Date.now()
+        });
+        delete parsed.planningChat;
+      }
+
+      if (!parsed.currentView) parsed.currentView = parsed.currentSeriesId ? 'series' : 'project';
+      
       if (parsed.projects) {
         parsed.projects = parsed.projects.map((p: any) => ({
           ...p,
@@ -157,14 +207,18 @@ function loadState(): AppState {
   } catch (e) {
     console.error('Failed to load state', e);
   }
-  return { projects: [], currentProjectId: null, planningChat: [], settings: defaultSettings };
+  return { series: [], projects: [], chatSessions: [], currentChatId: null, currentProjectId: null, currentSeriesId: null, currentView: 'project', settings: defaultSettings };
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AppState>({
+    series: [],
     projects: [],
+    chatSessions: [],
+    currentChatId: null,
     currentProjectId: null,
-    planningChat: [],
+    currentSeriesId: null,
+    currentView: 'project',
     settings: defaultSettings,
   });
   
@@ -189,7 +243,44 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [state, isLoaded]);
 
-  const createProject = (title: string, premise: string) => {
+  const createSeries = (title: string, premise: string) => {
+    const newSeries: SeriesProject = {
+      id: crypto.randomUUID(),
+      title,
+      premise,
+      bookIds: [],
+    };
+    setState(prev => ({
+      ...prev,
+      series: [...prev.series, newSeries],
+      currentSeriesId: newSeries.id,
+      currentProjectId: null,
+      currentView: 'series'
+    }));
+    return newSeries;
+  };
+
+  const deleteSeries = (id: string) => {
+    setState(prev => ({
+      ...prev,
+      series: prev.series.filter(s => s.id !== id),
+      currentSeriesId: prev.currentSeriesId === id ? null : prev.currentSeriesId,
+      currentView: prev.currentSeriesId === id ? 'project' : prev.currentView
+    }));
+  };
+
+  const setCurrentSeries = (id: string) => {
+    setState(prev => ({ ...prev, currentSeriesId: id, currentProjectId: null, currentView: 'series' }));
+  };
+
+  const updateSeries = (id: string, updates: Partial<SeriesProject>) => {
+    setState(prev => ({
+      ...prev,
+      series: prev.series.map(s => s.id === id ? { ...s, ...updates } : s)
+    }));
+  };
+
+  const createProject = (title: string, premise: string, seriesId?: string) => {
     const newProject: NovelProject = {
       id: crypto.randomUUID(),
       title,
@@ -201,25 +292,49 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       outlineTemplate: '',
       targetChapterCount: 10,
       povType: 'Third Person Limited',
+      seriesId
     };
-    setState(prev => ({
-      ...prev,
-      projects: [...prev.projects, newProject],
-      currentProjectId: newProject.id
-    }));
+    
+    setState(prev => {
+      const nextState = {
+        ...prev,
+        projects: [...prev.projects, newProject],
+        currentProjectId: newProject.id,
+        currentSeriesId: null,
+        currentView: 'project' as const
+      };
+      
+      // If adding to a series, update the series' bookIds
+      if (seriesId) {
+        nextState.series = nextState.series.map(s => 
+          s.id === seriesId ? { ...s, bookIds: [...s.bookIds, newProject.id] } : s
+        );
+      }
+      
+      return nextState;
+    });
+    
     return newProject;
   };
 
   const deleteProject = (id: string) => {
-    setState(prev => ({
-      ...prev,
-      projects: prev.projects.filter(p => p.id !== id),
-      currentProjectId: prev.currentProjectId === id ? null : prev.currentProjectId
-    }));
+    setState(prev => {
+      const nextState = {
+        ...prev,
+        projects: prev.projects.filter(p => p.id !== id),
+        currentProjectId: prev.currentProjectId === id ? null : prev.currentProjectId
+      };
+      // Also remove from any series that references it
+      nextState.series = nextState.series.map(s => ({
+        ...s,
+        bookIds: s.bookIds.filter(bid => bid !== id)
+      }));
+      return nextState;
+    });
   };
 
   const setCurrentProject = (id: string) => {
-    setState(prev => ({ ...prev, currentProjectId: id }));
+    setState(prev => ({ ...prev, currentProjectId: id, currentSeriesId: null, currentView: 'project' }));
   };
 
   const updateProject = (id: string, updates: Partial<NovelProject>) => {
@@ -236,22 +351,50 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }));
   };
 
-  const updatePlanningChat = (messages: { role: 'user' | 'assistant'; content: string }[]) => {
+  const createChatSession = () => {
+    const newChat: ChatSession = {
+      id: crypto.randomUUID(),
+      title: 'New Chat',
+      messages: [],
+      updatedAt: Date.now()
+    };
     setState(prev => ({
       ...prev,
-      planningChat: messages
+      chatSessions: [...prev.chatSessions, newChat],
+      currentChatId: newChat.id,
+      currentProjectId: null,
+      currentSeriesId: null,
+      currentView: 'chat'
+    }));
+    return newChat;
+  };
+
+  const deleteChatSession = (id: string) => {
+    setState(prev => ({
+      ...prev,
+      chatSessions: prev.chatSessions.filter(c => c.id !== id),
+      currentChatId: prev.currentChatId === id ? null : prev.currentChatId,
+      currentView: prev.currentChatId === id ? (prev.currentProjectId ? 'project' : (prev.currentSeriesId ? 'series' : 'project')) : prev.currentView
     }));
   };
 
-  const updatePlanningChatConfig = (config: { projectId: string; modelId: string } | undefined) => {
+  const setCurrentChatSession = (id: string) => {
+    setState(prev => ({ ...prev, currentChatId: id, currentProjectId: null, currentSeriesId: null, currentView: 'chat' }));
+  };
+
+  const updateChatSession = (id: string, updates: Partial<ChatSession>) => {
     setState(prev => ({
       ...prev,
-      planningChatConfig: config
+      chatSessions: prev.chatSessions.map(c => c.id === id ? { ...c, ...updates, updatedAt: Date.now() } : c)
     }));
   };
 
   const getCurrentProject = () => {
     return state.projects.find(p => p.id === state.currentProjectId);
+  };
+
+  const getCurrentSeries = () => {
+    return state.series.find(s => s.id === state.currentSeriesId);
   };
 
   const importState = (newState: AppState) => {
@@ -261,7 +404,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   if (!isLoaded) return null; // Prevent hydration mismatch
 
   return (
-    <StoreContext.Provider value={{ state, createProject, deleteProject, setCurrentProject, updateProject, updateSettings, updatePlanningChat, updatePlanningChatConfig, getCurrentProject, importState }}>
+    <StoreContext.Provider value={{ 
+      state, 
+      createSeries, deleteSeries, setCurrentSeries, updateSeries,
+      createProject, deleteProject, setCurrentProject, updateProject,
+      createChatSession,
+      deleteChatSession,
+      setCurrentChatSession,
+      updateChatSession,
+      updateSettings,
+      getCurrentProject, getCurrentSeries, importState 
+    }}>
       {children}
     </StoreContext.Provider>
   );

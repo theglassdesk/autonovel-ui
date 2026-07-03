@@ -96,40 +96,57 @@ function parseJSONWithRepair(text: string) {
   }
 }
 
+export type SeriesContext = {
+  premise?: string;
+  penName?: string;
+};
+
+function buildSeriesContextString(seriesContext?: SeriesContext) {
+  if (!seriesContext) return '';
+  let str = '';
+  if (seriesContext.penName) {
+    str += `\n\nThe author's pen name is ${seriesContext.penName}. Match their typical style and expectations.`;
+  }
+  if (seriesContext.premise) {
+    str += `\n\n--- SERIES CONTEXT ---\nThis book belongs to a larger series. Here is the series premise/bible:\n${seriesContext.premise}\n------------------------\n`;
+  }
+  return str;
+}
+
 const PLANNING_SYSTEM_PROMPT = `You are an expert fiction planning agent and structural editor. Your job is to help plan, structure, and package commercial fiction. You specialize in genres with strong reader expectations, specifically dark romance, psychological thrillers, and small town contemporary romance/western romance.`;
 
 const TITLE_SYSTEM_PROMPT = `You are an expert fiction planning agent and structural editor. Your job is to help plan, structure, and package commercial fiction. You specialize in genres with strong reader expectations, specifically dark romance, psychological thrillers, and small town contemporary romance/western romance. When you create the book title, you must match the conventions of the requested genre. A small town romance title needs a cozy, community focused feel. A dark romance or thriller requires an intense or ominous tone. Keep titles memorable and under five words.`;
 
-export async function generateSynopsis(apiUrl: string, model: string, systemPrompt: string, title: string, premise: string, provider?: string) {
+export async function generateSynopsis(apiUrl: string, model: string, systemPrompt: string, title: string, premise: string, provider?: string, seriesContext?: SeriesContext) {
   const messages: Message[] = [
     { role: 'system', content: PLANNING_SYSTEM_PROMPT },
-    { role: 'user', content: `Write a detailed 2-3 paragraph synopsis for a novel titled "${title}".\n\nPremise: ${premise}\n\nDo not include any pleasantries, just the synopsis text.` }
+    { role: 'user', content: `Write a detailed 2-3 paragraph synopsis for a novel titled "${title}".\n\nPremise: ${premise}${buildSeriesContextString(seriesContext)}\n\nDo not include any pleasantries, just the synopsis text.` }
   ];
   return generateChatCompletion(apiUrl, model, messages, 0.8, 1500, provider);
 }
 
-export async function generateTitle(apiUrl: string, model: string, systemPrompt: string, synopsis: string, provider?: string) {
+export async function generateTitle(apiUrl: string, model: string, systemPrompt: string, synopsis: string, provider?: string, seriesContext?: SeriesContext) {
   const messages: Message[] = [
     { role: 'system', content: TITLE_SYSTEM_PROMPT },
-    { role: 'user', content: `Based on the following synopsis, suggest a single, compelling title for the novel. Return ONLY the title text, nothing else. No quotes.\n\nSynopsis:\n${synopsis}` }
+    { role: 'user', content: `Based on the following synopsis, suggest a single, compelling title for the novel. Return ONLY the title text, nothing else. No quotes.${buildSeriesContextString(seriesContext)}\n\nSynopsis:\n${synopsis}` }
   ];
   const response = await generateChatCompletion(apiUrl, model, messages, 0.7, 50, provider);
   return response.replace(/["']/g, '').trim();
 }
 
-export async function generateCharacters(apiUrl: string, model: string, systemPrompt: string, synopsis: string, provider?: string) {
+export async function generateCharacters(apiUrl: string, model: string, systemPrompt: string, synopsis: string, provider?: string, seriesContext?: SeriesContext) {
   const messages: Message[] = [
     { role: 'system', content: PLANNING_SYSTEM_PROMPT },
     {
       role: 'user', content: `Based on the following synopsis, create a list of EXACTLY 8 to 10 main and supporting characters.
 
-Since the synopsis only mentions a few characters by name, you MUST invent additional characters (such as Wyatt's unnamed brothers, ranch hands, Mariposa townspeople, or local rivals) to build out the story world and bring the total character count to between 8 and 10.
+Since the synopsis only mentions a few characters by name, you MUST invent additional characters (such as Wyatt's unnamed brothers, ranch hands, Mariposa townspeople, or local rivals) to build out the story world and bring the total character count to between 8 and 10.${buildSeriesContextString(seriesContext)}
 
 Synopsis:
 ${synopsis}
 
 For each character, you must provide the following details:
-- name: The character's full name.
+- name: The character's full name. (If a nickname is included, enclose it in single quotes, e.g. Tucker 'Bull' McAllister. NEVER use unescaped double quotes inside the JSON string).
 - role: Narrative role (e.g., Protagonist, Antagonist, Love Interest, Supporting).
 - description: A general 1-2 sentence summary of who they are.
 - identity: Core occupation, background, or social role.
@@ -142,7 +159,9 @@ For each character, you must provide the following details:
 - need: The Need (Internal Growth - what they must learn or accept to grow emotionally).
 - lie: The Lie (The false belief they hold about themselves or the world that holds them back).
 
-Format your response EXACTLY as a JSON array of 8 to 10 objects with the exact keys: "name", "role", "description", "identity", "physicalDescription", "distinctFeatures", "coreValues", "flaws", "fears", "want", "need", "lie". Do not include Markdown blocks like \`\`\`json, just return the raw array.` }
+Format your response EXACTLY as a JSON array of 8 to 10 objects with the exact keys: "name", "role", "description", "identity", "physicalDescription", "distinctFeatures", "coreValues", "flaws", "fears", "want", "need", "lie". Do not include Markdown blocks like \`\`\`json, just return the raw array.
+
+IMPORTANT: Make sure all JSON strings are valid. If you need to write quotation marks inside any string value, use single quotes (e.g. 'Bull') instead of unescaped double quotes.` }
   ];
   const response = await generateChatCompletion(apiUrl, model, messages, 0.7, 4000, provider);
   try {
@@ -163,7 +182,8 @@ export async function generateOutline(
   outlineTemplate: string,
   provider?: string,
   povType?: string,
-  dualPov?: boolean
+  dualPov?: boolean,
+  seriesContext?: SeriesContext
 ) {
   let templateInstruction = '';
   if (outlineTemplate && outlineTemplate.trim() !== '') {
@@ -184,7 +204,7 @@ export async function generateOutline(
     { role: 'system', content: PLANNING_SYSTEM_PROMPT },
     { role: 'user', content: `Given the synopsis and characters, outline the chapters for the novel. You MUST generate exactly ${targetChapterCount} chapters.
 
-${povInstruction}
+${povInstruction}${buildSeriesContextString(seriesContext)}
 
 Synopsis:
 ${synopsis}
@@ -214,7 +234,8 @@ export async function continueOutline(
   outlineTemplate: string,
   provider?: string,
   povType?: string,
-  dualPov?: boolean
+  dualPov?: boolean,
+  seriesContext?: SeriesContext
 ) {
   const lastChapter = currentOutline.length > 0 ? currentOutline[currentOutline.length - 1].chapterNumber : 0;
 
@@ -237,7 +258,7 @@ export async function continueOutline(
     { role: 'system', content: PLANNING_SYSTEM_PROMPT },
     { role: 'user', content: `Given the synopsis and characters, continue outlining the chapters for the novel starting from Chapter ${lastChapter + 1}. Aim for 5-10 MORE chapters.
 
-${povInstruction}
+${povInstruction}${buildSeriesContextString(seriesContext)}
 
 Synopsis:
 ${synopsis}
@@ -271,12 +292,18 @@ export async function generateChapter(
   existingContent?: string,
   povType?: string,
   characters?: any[],
-  previousChapterData?: { title?: string; summary?: string; content?: string }
+  previousChapterData?: { title?: string; summary?: string; content?: string },
+  seriesContext?: SeriesContext
 ) {
   const chapterDef = outline.find(c => c.chapterNumber === chapterNumber);
   if (!chapterDef) throw new Error("Chapter not found in outline");
 
   let userPrompt = '';
+  
+  const seriesString = buildSeriesContextString(seriesContext);
+  if (seriesString) {
+    userPrompt += `${seriesString}\n\n`;
+  }
 
   let povInstruction = '';
   if (povType && chapterDef.pov) {

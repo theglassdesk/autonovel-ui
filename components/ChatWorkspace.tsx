@@ -260,14 +260,15 @@ function renderMarkdown(text: string): React.ReactNode {
   return <>{elements}</>;
 }
 
-export function PlanningTab() {
-  const { state, updatePlanningChat, updatePlanningChatConfig } = useStore();
+export function ChatWorkspace() {
+  const { state, updateChatSession, createChatSession } = useStore();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const messages = React.useMemo(() => state.planningChat || [], [state.planningChat]);
+  const currentSession = state.chatSessions.find(c => c.id === state.currentChatId);
+  const messages = React.useMemo(() => currentSession?.messages || [], [currentSession]);
 
   const [availableModels, setAvailableModels] = useState<{id: string, label: string}[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
@@ -290,10 +291,9 @@ export function PlanningTab() {
     fetchModels();
   }, [state.settings.chatProvider]);
 
-  const selectedModel = state.planningChatConfig?.modelId || state.settings.chatModel || '';
-  const selectedProjectId = state.planningChatConfig?.projectId || '';
-
-  const currentModel = selectedModel;
+  const [selectedModel, setSelectedModel] = useState(state.settings.chatModel || '');
+  const currentModel = selectedModel || state.settings.chatModel || '';
+  const selectedContextId = currentSession?.contextId || '';
 
   // Auto-scroll to bottom of messages
   useEffect(() => {
@@ -301,11 +301,18 @@ export function PlanningTab() {
   }, [messages]);
 
   const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || isLoading || !currentSession) return;
+
+    // Auto-title if it's the first message
+    let title = currentSession.title;
+    if (messages.length === 0) {
+      title = input.trim().substring(0, 30) + (input.trim().length > 30 ? '...' : '');
+      updateChatSession(currentSession.id, { title });
+    }
 
     const userMessage = { role: 'user' as const, content: input.trim() };
     const newMessages = [...messages, userMessage];
-    updatePlanningChat(newMessages);
+    updateChatSession(currentSession.id, { messages: newMessages });
     setInput('');
     setIsLoading(true);
 
@@ -314,11 +321,27 @@ export function PlanningTab() {
 
       let systemPrompt = "You are a friendly helper that knows the book industry. Any questions or concerns the user has about any part of the book planning or writing process, you know about it and provide expert advice.";
 
-      // Inject context if a project is selected
-      if (selectedProjectId) {
-        const project = state.projects.find(p => p.id === selectedProjectId);
+      // Inject context if a project or series is selected
+      if (selectedContextId) {
+        let project = state.projects.find(p => p.id === selectedContextId);
+        let series = state.series.find(s => s.id === selectedContextId);
+        
         if (project) {
           systemPrompt += `\n\nThe user has selected to discuss their novel titled "${project.title}". Here is the novel's context:\n`;
+          
+          if (project.seriesId) {
+            const series = state.series.find(s => s.id === project.seriesId);
+            if (series && series.premise) {
+              systemPrompt += `\nSeries Context: This book is part of a series. Series Premise: ${series.premise}\n`;
+            }
+            const effectivePenName = project.penName || series?.penName;
+            if (effectivePenName) {
+              systemPrompt += `\nThe author's pen name is ${effectivePenName}.\n`;
+            }
+          } else if (project.penName) {
+            systemPrompt += `\nThe author's pen name is ${project.penName}.\n`;
+          }
+
           if (project.premise) systemPrompt += `\nPremise: ${project.premise}`;
           if (project.synopsis) systemPrompt += `\nSynopsis: ${project.synopsis}`;
           if (project.characters && project.characters.length > 0) {
@@ -338,6 +361,14 @@ export function PlanningTab() {
               });
             }
           }
+        } else if (series) {
+          systemPrompt += `\n\nThe user has selected to discuss their series titled "${series.title}". Here is the series context:\n`;
+          if (series.premise) systemPrompt += `\nSeries Premise: ${series.premise}\n`;
+          if (series.penName) systemPrompt += `\nThe author's pen name is ${series.penName}.\n`;
+          const seriesBooks = state.projects.filter(p => p.seriesId === series.id);
+          if (seriesBooks.length > 0) {
+            systemPrompt += `\nBooks in this series:\n` + seriesBooks.map(b => `- ${b.title}: ${b.premise}`).join('\n');
+          }
         }
       }
 
@@ -356,16 +387,16 @@ export function PlanningTab() {
         state.settings.chatProvider
       );
 
-      updatePlanningChat([
+      updateChatSession(currentSession.id, { messages: [
         ...newMessages,
         { role: 'assistant', content: response }
-      ]);
+      ]});
     } catch (error: any) {
       console.error("Chat Error:", error);
-      updatePlanningChat([
+      updateChatSession(currentSession.id, { messages: [
         ...newMessages,
         { role: 'assistant', content: `**Error:** ${error.message || "Something went wrong."}` }
-      ]);
+      ]});
     } finally {
       setIsLoading(false);
     }
@@ -426,13 +457,26 @@ export function PlanningTab() {
 
   const handleClearChat = () => {
     if (confirm('Are you sure you want to clear the chat history?')) {
-      updatePlanningChat([]);
-      updatePlanningChatConfig(undefined);
+      if (currentSession) {
+        updateChatSession(currentSession.id, { messages: [] });
+      }
     }
   };
 
+  if (!currentSession) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-transparent h-full">
+        <div className="text-center max-w-sm">
+          <MessageSquare className="mx-auto h-12 w-12 text-slate-400 mb-4 opacity-50" />
+          <h2 className="text-xl font-medium text-slate-900">No chat selected</h2>
+          <p className="text-sm text-slate-600 mt-2">Select a planning chat from the sidebar or create a new one to begin.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col h-full bg-transparent overflow-hidden relative">
+    <div className="flex-1 flex flex-col h-full bg-transparent overflow-hidden relative">
       {messages.length > 0 && (
         <div className="absolute top-2.5 right-6 flex items-center gap-2 z-10">
           <button onClick={handleCopyChat} className="p-1.5 px-2.5 bg-white/80 backdrop-blur-sm border border-white/60 text-slate-600 hover:bg-white text-xs font-medium rounded-lg shadow-sm transition-all flex items-center gap-1.5" title="Copy Chat">
@@ -512,14 +556,21 @@ export function PlanningTab() {
               <span>Attach Context:</span>
             </div>
             <select
-              value={selectedProjectId}
-              onChange={(e) => updatePlanningChatConfig({ projectId: e.target.value, modelId: currentModel })}
+              value={selectedContextId}
+              onChange={(e) => updateChatSession(currentSession.id, { contextId: e.target.value })}
               className="text-xs bg-white/50 border border-white/60 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-indigo-300 text-slate-700"
             >
               <option value="">None (General Chat)</option>
-              {state.projects.map(p => (
-                <option key={p.id} value={p.id}>{p.title || 'Untitled Project'}</option>
-              ))}
+              <optgroup label="Series">
+                {state.series.map(s => (
+                  <option key={s.id} value={s.id}>{s.title || 'Untitled Series'}</option>
+                ))}
+              </optgroup>
+              <optgroup label="Books">
+                {state.projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.title || 'Untitled Book'}</option>
+                ))}
+              </optgroup>
             </select>
           </div>
 
@@ -544,7 +595,7 @@ export function PlanningTab() {
                   type="text"
                   list="planning-chat-models"
                   value={currentModel}
-                  onChange={(e) => updatePlanningChatConfig({ projectId: selectedProjectId, modelId: e.target.value })}
+                  onChange={(e) => setSelectedModel(e.target.value)}
                   placeholder={loadingModels ? "Loading..." : "Model ID"}
                   className="w-32 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium py-1.5 px-3 rounded-full outline-none transition-colors border border-transparent placeholder-slate-400"
                 />
