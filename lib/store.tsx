@@ -70,6 +70,7 @@ export type NovelProject = {
   seriesId?: string;
   penName?: string;
   systemPrompt?: string;
+  previousBooksSummary?: string;
 };
 
 export type AppState = {

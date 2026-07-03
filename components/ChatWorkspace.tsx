@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { generateChatCompletion } from '@/lib/inference';
-import { Loader2, Send, Book, Bot, User, Copy, Download, Trash2, Check } from 'lucide-react';
+import { Loader2, Send, Book, Bot, User, Copy, Download, Trash2, Check, MessageSquare } from 'lucide-react';
 
 interface Token {
   type: 'text' | 'bold' | 'italic' | 'code' | 'link';
@@ -343,6 +343,7 @@ export function ChatWorkspace() {
           }
 
           if (project.premise) systemPrompt += `\nPremise: ${project.premise}`;
+          if (project.previousBooksSummary) systemPrompt += `\nPrevious Books Summary: ${project.previousBooksSummary}`;
           if (project.synopsis) systemPrompt += `\nSynopsis: ${project.synopsis}`;
           if (project.characters && project.characters.length > 0) {
             systemPrompt += `\nCharacters: ${JSON.stringify(project.characters)}`;

@@ -99,6 +99,7 @@ function parseJSONWithRepair(text: string) {
 export type SeriesContext = {
   premise?: string;
   penName?: string;
+  previousBooksSummary?: string;
 };
 
 function buildSeriesContextString(seriesContext?: SeriesContext) {
@@ -109,6 +110,9 @@ function buildSeriesContextString(seriesContext?: SeriesContext) {
   }
   if (seriesContext.premise) {
     str += `\n\n--- SERIES CONTEXT ---\nThis book belongs to a larger series. Here is the series premise/bible:\n${seriesContext.premise}\n------------------------\n`;
+  }
+  if (seriesContext.previousBooksSummary) {
+    str += `\n\n--- PREVIOUS BOOKS SUMMARY ---\nHere is a summary of what happened in previous books in this series:\n${seriesContext.previousBooksSummary}\n------------------------\n`;
   }
   return str;
 }

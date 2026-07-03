@@ -51,7 +51,7 @@ export function Workspace() {
   const series = project.seriesId ? state.series.find(s => s.id === project.seriesId) : undefined;
   const effectiveSystemPrompt = project.systemPrompt || series?.systemPrompt || state.settings.systemPrompt;
   const effectivePenName = project.penName || series?.penName;
-  const seriesContext = series ? { premise: series.premise, penName: effectivePenName } : { penName: effectivePenName };
+  const seriesContext = series ? { premise: series.premise, penName: effectivePenName, previousBooksSummary: project.previousBooksSummary } : { penName: effectivePenName, previousBooksSummary: project.previousBooksSummary };
 
   const handleGenerateSynopsis = async () => {
     setLoading('synopsis');
@@ -293,11 +293,10 @@ export function Workspace() {
           <button
             onClick={handleGenerateTitle}
             disabled={loading === 'title' || !project.synopsis}
-            className={`ml-2 p-1.5 shrink-0 rounded transition-colors ${
-              !project.synopsis || loading === 'title'
+            className={`ml-2 p-1.5 shrink-0 rounded transition-colors ${!project.synopsis || loading === 'title'
                 ? 'text-slate-400 cursor-not-allowed opacity-40'
                 : 'text-indigo-500 hover:bg-white/40 hover:text-indigo-600'
-            }`}
+              }`}
             title={!project.synopsis ? "Generate synopsis first to suggest title" : "Suggest Title"}
           >
             {loading === 'title' ? <Loader2 size={16} className="animate-spin" /> : <Wand2 size={16} />}
@@ -389,7 +388,23 @@ export function Workspace() {
                 placeholder="What is your novel about? (e.g. A young programmer discovers her code can alter reality...)"
                 className="w-full h-24 p-3 border border-white/40 rounded-lg text-sm bg-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white/60 shadow-sm resize-none"
               />
-              <div className="flex justify-end">
+              
+              {project.seriesId && (
+                <div className="mt-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-6 h-6 rounded bg-slate-100 text-slate-500 flex items-center justify-center"><FileText size={14} /></div>
+                    <h4 className="font-medium text-slate-700 text-sm">Previous Books Summary (Optional)</h4>
+                  </div>
+                  <textarea
+                    value={project.previousBooksSummary || ''}
+                    onChange={e => updateProject(project.id, { previousBooksSummary: e.target.value })}
+                    placeholder="Briefly summarize what happened in the previous books in this series so the AI stays in context..."
+                    className="w-full h-20 p-3 border border-white/40 rounded-lg text-sm bg-white/30 focus:outline-none focus:ring-2 focus:ring-slate-500/50 focus:bg-white/60 shadow-sm resize-none"
+                  />
+                </div>
+              )}
+              
+              <div className="flex justify-end mt-2">
                 <button
                   onClick={handleGenerateSynopsis}
                   disabled={loading === 'synopsis' || !project.premise}
@@ -563,7 +578,7 @@ export function Workspace() {
                               updateProject(project.id, { characters: newChar });
                             }}
                           />
-                          
+
                           {expandedChars[c.id] && (
                             <div className="mt-4 pt-4 border-t border-white/20 grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-1 duration-200">
                               {/* Profile & Appearance */}
@@ -572,7 +587,7 @@ export function Workspace() {
                                   <Users size={12} className="text-indigo-600" />
                                   Profile & Appearance
                                 </h4>
-                                
+
                                 <div className="space-y-1">
                                   <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Identity</label>
                                   <textarea
@@ -622,7 +637,7 @@ export function Workspace() {
                                   <PenTool size={12} className="text-teal-600" />
                                   Psychology & Beliefs
                                 </h4>
-                                
+
                                 <div className="space-y-1">
                                   <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">Core Values</label>
                                   <textarea
@@ -672,7 +687,7 @@ export function Workspace() {
                                   <Layers size={12} className="text-rose-600" />
                                   Character Arc
                                 </h4>
-                                
+
                                 <div className="space-y-1">
                                   <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">The Want (External Goal)</label>
                                   <textarea
@@ -977,7 +992,7 @@ export function Workspace() {
                       {loading === `chapter-${selectedChapter}` ? (
                         <div className="absolute inset-0 bg-white/40 backdrop-blur-sm flex flex-col items-center justify-center z-10">
                           <Loader2 className="h-8 w-8 text-indigo-500 animate-spin mb-4" />
-                          <p className="text-sm font-medium text-slate-700 animate-pulse">Generating Chapter {selectedChapter} via local inference...</p>
+                          <p className="text-sm font-medium text-slate-700 animate-pulse">Generating Chapter {selectedChapter}...</p>
                         </div>
                       ) : null}
 
