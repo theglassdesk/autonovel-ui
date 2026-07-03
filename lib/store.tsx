@@ -71,6 +71,8 @@ export type NovelProject = {
   penName?: string;
   systemPrompt?: string;
   previousBooksSummary?: string;
+  lastActiveTab?: 'foundation' | 'drafting';
+  lastSelectedChapter?: number | null;
 };
 
 export type AppState = {
@@ -293,7 +295,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       outlineTemplate: '',
       targetChapterCount: 10,
       povType: 'Third Person Limited',
-      seriesId
+      seriesId,
+      lastActiveTab: 'foundation',
+      lastSelectedChapter: null
     };
     
     setState(prev => {

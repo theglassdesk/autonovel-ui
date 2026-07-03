@@ -2,18 +2,35 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/lib/store';
-import { generateSynopsis, generateCharacters, generateOutline, continueOutline, generateChapter, generateTitle } from '@/lib/inference';
-import { Loader2, Play, Check, ChevronRight, ChevronDown, FileText, Users, ListTree, BookOpen, PenTool, Wand2, Download, Plus, Trash2, MessageSquare, Layers, User } from 'lucide-react';
+import { generateSynopsis, generateCharacters, generateOutline, continueOutline, generateChapter, generateTitle, generateInlineEdit } from '@/lib/inference';
+import { Loader2, Play, Check, ChevronRight, ChevronDown, FileText, Users, ListTree, BookOpen, PenTool, Wand2, Download, Plus, Trash2, MessageSquare, Layers, User, X } from 'lucide-react';
 
 export function Workspace() {
   const { state, getCurrentProject, updateProject } = useStore();
   const project = getCurrentProject();
   const [loading, setLoading] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'foundation' | 'drafting'>('foundation');
-  const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
+  const [activeTab, setActiveTabState] = useState<'foundation' | 'drafting'>(project?.lastActiveTab || 'foundation');
+  const [selectedChapter, setSelectedChapterState] = useState<number | null>(project?.lastSelectedChapter || null);
   const [error, setError] = useState<string | null>(null);
   const [expandedChars, setExpandedChars] = useState<Record<string, boolean>>({});
+  
+  // Inline editing state
+  const [selectionRange, setSelectionRange] = useState<{ start: number; end: number; text: string } | null>(null);
+  const [inlineInstruction, setInlineInstruction] = useState('');
+  const [isInlineEditing, setIsInlineEditing] = useState(false);
+  const [pendingRevision, setPendingRevision] = useState<{ start: number; end: number; newText: string } | null>(null);
+
   const contentRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
+
+  // Sync scroll between textarea and backdrop
+  const handleTextareaScroll = () => {
+    if (textareaRef.current && backdropRef.current) {
+      backdropRef.current.scrollTop = textareaRef.current.scrollTop;
+      backdropRef.current.scrollLeft = textareaRef.current.scrollLeft;
+    }
+  };
 
   // Scroll main view back to top on tab changes
   useEffect(() => {
@@ -34,6 +51,17 @@ export function Workspace() {
       ...prev,
       [charId]: !prev[charId]
     }));
+  };
+
+  // Setters that also update the project store so state is remembered
+  const setActiveTab = (tab: 'foundation' | 'drafting') => {
+    setActiveTabState(tab);
+    if (project) updateProject(project.id, { lastActiveTab: tab });
+  };
+
+  const setSelectedChapter = (chapterNum: number | null) => {
+    setSelectedChapterState(chapterNum);
+    if (project) updateProject(project.id, { lastSelectedChapter: chapterNum });
   };
 
   if (!project) {
@@ -241,6 +269,70 @@ export function Workspace() {
     } finally {
       setLoading(null);
     }
+  };
+
+  const handleInlineEdit = async () => {
+    if (!selectionRange || !inlineInstruction || !selectedChapter) return;
+    setIsInlineEditing(true);
+    setError(null);
+    try {
+      const endpointURL = state.settings.draftingProvider === 'local' ? state.settings.apiUrl : '/api';
+      
+      const previousChapters = project.chapters
+        .filter(c => c.chapterNumber < selectedChapter && c.status === 'drafted')
+        .map(c => {
+          const outDef = project.outline.find(o => o.chapterNumber === c.chapterNumber);
+          return {
+            chapterNumber: c.chapterNumber,
+            title: outDef?.title || '',
+            summary: outDef?.summary || '',
+            content: c.content
+          };
+        });
+
+      const currentChapter = project.chapters.find(c => c.chapterNumber === selectedChapter);
+      
+      const result = await generateInlineEdit(
+        endpointURL,
+        state.settings.draftingModel,
+        effectiveSystemPrompt,
+        selectionRange.text,
+        inlineInstruction,
+        currentChapter?.content || '',
+        previousChapters,
+        project.synopsis,
+        project.characters,
+        state.settings.draftingProvider,
+        seriesContext
+      );
+      
+      setPendingRevision({
+        start: selectionRange.start,
+        end: selectionRange.end,
+        newText: result
+      });
+      setIsInlineEditing(false);
+    } catch (e: any) {
+      setError(e.message);
+      setIsInlineEditing(false);
+    }
+  };
+
+  const acceptRevision = () => {
+    if (!pendingRevision || !selectedChapter) return;
+    const currentChapter = project.chapters.find(c => c.chapterNumber === selectedChapter);
+    if (!currentChapter || !currentChapter.content) return;
+    
+    const newContent = currentChapter.content.substring(0, pendingRevision.start) + 
+      pendingRevision.newText + 
+      currentChapter.content.substring(pendingRevision.end);
+      
+    updateProject(project.id, {
+      chapters: project.chapters.map(c => c.chapterNumber === selectedChapter ? { ...c, content: newContent } : c)
+    });
+    setPendingRevision(null);
+    setSelectionRange(null);
+    setInlineInstruction('');
   };
 
   const handleDownloadDraft = () => {
@@ -996,16 +1088,131 @@ export function Workspace() {
                         </div>
                       ) : null}
 
-                      <textarea
-                        value={data?.content || ''}
-                        onChange={(e) => {
-                          updateProject(project.id, {
-                            chapters: project.chapters.map(c => c.chapterNumber === selectedChapter ? { ...c, content: e.target.value } : c)
-                          })
-                        }}
-                        placeholder="Chapter text will appear here..."
-                        className="w-full h-full resize-none outline-none font-serif text-slate-800 text-lg leading-relaxed bg-transparent custom-scrollbar whitespace-pre-wrap"
-                      />
+                      <div className="relative w-full h-full">
+                        {/* Fake Highlight Backdrop */}
+                        <div 
+                          ref={backdropRef}
+                          className="absolute inset-0 w-full h-full font-serif text-lg leading-relaxed whitespace-pre-wrap overflow-hidden text-transparent break-words pointer-events-none"
+                        >
+                          {selectionRange && data?.content ? (
+                            <>
+                              {data.content.substring(0, selectionRange.start)}
+                              <mark className="bg-indigo-200/70 text-transparent rounded-sm">{data.content.substring(selectionRange.start, selectionRange.end)}</mark>
+                              {data.content.substring(selectionRange.end)}
+                            </>
+                          ) : data?.content}
+                        </div>
+
+                        <textarea
+                          ref={textareaRef}
+                          onScroll={handleTextareaScroll}
+                          value={data?.content || ''}
+                          onChange={(e) => {
+                            updateProject(project.id, {
+                              chapters: project.chapters.map(c => c.chapterNumber === selectedChapter ? { ...c, content: e.target.value } : c)
+                            })
+                          }}
+                          onSelect={(e) => {
+                            const target = e.currentTarget;
+                            const start = target.selectionStart;
+                            const end = target.selectionEnd;
+                            if (start !== end && data?.content) {
+                              const text = data.content.substring(start, end);
+                              if (text.trim().length > 0) {
+                                setSelectionRange({ start, end, text });
+                                return;
+                              }
+                            }
+                            if (!isInlineEditing && !pendingRevision) {
+                              setSelectionRange(null);
+                            }
+                          }}
+                          onMouseUp={(e) => {
+                            const target = e.currentTarget;
+                            const start = target.selectionStart;
+                            const end = target.selectionEnd;
+                            if (start !== end && data?.content) {
+                              const text = data.content.substring(start, end);
+                              if (text.trim().length > 0) {
+                                setSelectionRange({ start, end, text });
+                                return;
+                              }
+                            }
+                          }}
+                          placeholder="Chapter text will appear here..."
+                          className="absolute inset-0 w-full h-full resize-none outline-none font-serif text-slate-800 text-lg leading-relaxed bg-transparent custom-scrollbar whitespace-pre-wrap break-words"
+                        />
+                      </div>
+
+                      {/* Inline Edit Panel */}
+                      {selectionRange && !pendingRevision && (
+                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-2xl bg-white rounded-xl shadow-2xl border border-slate-200 p-4 animate-in slide-in-from-bottom-4 duration-200 z-20 flex flex-col gap-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                              Inline Edit Selection ({selectionRange.text.length} chars)
+                            </span>
+                            <button 
+                              onClick={() => setSelectionRange(null)}
+                              className="text-slate-400 hover:text-slate-600 transition-colors"
+                              disabled={isInlineEditing}
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                          <div className="flex gap-2 items-end">
+                            <textarea
+                              value={inlineInstruction}
+                              onChange={e => setInlineInstruction(e.target.value)}
+                              placeholder="E.g., Fix inconsistency with chapter 1..."
+                              className="flex-1 h-12 text-sm p-2 bg-slate-50 border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              disabled={isInlineEditing}
+                            />
+                            <button
+                              onClick={handleInlineEdit}
+                              disabled={isInlineEditing || !inlineInstruction.trim()}
+                              className="h-12 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors flex items-center justify-center min-w-[100px]"
+                            >
+                              {isInlineEditing ? <Loader2 size={16} className="animate-spin" /> : 'Revise'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Pending Revision Review Panel */}
+                      {pendingRevision && (
+                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-2xl bg-indigo-50 rounded-xl shadow-2xl border border-indigo-200 p-4 animate-in slide-in-from-bottom-4 duration-200 z-20 flex flex-col gap-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-indigo-600 uppercase tracking-wider flex items-center gap-1">
+                              <Wand2 size={14} /> Review Revision
+                            </span>
+                            <button 
+                              onClick={() => { setPendingRevision(null); setSelectionRange(null); setInlineInstruction(''); }}
+                              className="text-slate-400 hover:text-slate-600 transition-colors"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                          
+                          <div className="bg-white p-3 rounded-lg text-sm text-slate-800 border border-indigo-100 max-h-40 overflow-y-auto whitespace-pre-wrap font-serif">
+                            {pendingRevision.newText}
+                          </div>
+                          
+                          <div className="flex justify-end gap-2 mt-1">
+                            <button
+                              onClick={() => setPendingRevision(null)}
+                              className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-lg transition-colors"
+                            >
+                              Reject
+                            </button>
+                            <button
+                              onClick={acceptRevision}
+                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                            >
+                              <Check size={16} /> Accept & Replace
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </>
                 );

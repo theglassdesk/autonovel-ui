@@ -361,3 +361,61 @@ export async function generateChapter(
 
   return generateChatCompletion(apiUrl, model, messages, 0.85, undefined, provider);
 }
+
+export async function generateInlineEdit(
+  apiUrl: string,
+  model: string,
+  systemPrompt: string,
+  selectedText: string,
+  instruction: string,
+  fullChapterText: string,
+  previousChapters: { chapterNumber: number; title: string; summary: string; content?: string }[],
+  synopsis: string,
+  characters: any[],
+  provider?: string,
+  seriesContext?: SeriesContext
+) {
+  let userPrompt = '';
+  const seriesString = buildSeriesContextString(seriesContext);
+  if (seriesString) {
+    userPrompt += `${seriesString}\n\n`;
+  }
+
+  userPrompt += `--- OVERALL NOVEL SYNOPSIS ---\n${synopsis}\n\n`;
+
+  if (characters && characters.length > 0) {
+    userPrompt += `--- CHARACTER PROFILES ---\n${JSON.stringify(characters, null, 2)}\n\n`;
+  }
+
+  if (previousChapters && previousChapters.length > 0) {
+    userPrompt += `--- PREVIOUS CHAPTERS CONTEXT ---\n`;
+    const includeFullText = previousChapters.length <= 5;
+    if (includeFullText) {
+      userPrompt += `Note: Including full text for all ${previousChapters.length} previous chapters.\n\n`;
+    } else {
+      userPrompt += `Note: Including summaries for ${previousChapters.length} previous chapters to preserve context space.\n\n`;
+    }
+
+    for (const ch of previousChapters) {
+      userPrompt += `Chapter ${ch.chapterNumber}: ${ch.title}\nSummary: ${ch.summary}\n`;
+      if (includeFullText && ch.content) {
+        userPrompt += `Content:\n${ch.content}\n`;
+      }
+      userPrompt += `\n`;
+    }
+  }
+
+  userPrompt += `--- CURRENT CHAPTER FULL TEXT ---\n${fullChapterText}\n\n`;
+  
+  userPrompt += `--- INLINE EDIT REQUEST ---\n`;
+  userPrompt += `The user has highlighted the following exact text from the current chapter to be edited/rewritten:\n\n<selection>\n${selectedText}\n</selection>\n\n`;
+  userPrompt += `Here is the user's instruction for this edit:\n<instruction>\n${instruction}\n</instruction>\n\n`;
+  userPrompt += `As an expert editor, please rewrite the highlighted text according to the instruction, ensuring it flows naturally back into the surrounding chapter text. Return ONLY the revised text that should replace the <selection>. Do not include any pleasantries, markdown blocks, or surrounding context—just the raw replacement string.`;
+
+  const messages: Message[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt }
+  ];
+
+  return generateChatCompletion(apiUrl, model, messages, 0.7, undefined, provider);
+}
