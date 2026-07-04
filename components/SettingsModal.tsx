@@ -9,8 +9,10 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
 
   const [draftingModels, setDraftingModels] = useState<{id: string, label: string}[]>([]);
   const [chatModels, setChatModels] = useState<{id: string, label: string}[]>([]);
+  const [editingModels, setEditingModels] = useState<{id: string, label: string}[]>([]);
   const [loadingDrafting, setLoadingDrafting] = useState(false);
   const [loadingChat, setLoadingChat] = useState(false);
+  const [loadingEditing, setLoadingEditing] = useState(false);
 
   useEffect(() => {
     async function fetchModels() {
@@ -43,6 +45,22 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
     }
     fetchModels();
   }, [state.settings.chatProvider]);
+
+  useEffect(() => {
+    async function fetchModels() {
+      setLoadingEditing(true);
+      try {
+        const res = await fetch(`/api/models?provider=${state.settings.editingProvider}`);
+        const data = await res.json();
+        if (data.data) setEditingModels(data.data);
+      } catch (e) {
+        console.error("Failed to fetch editing models", e);
+      } finally {
+        setLoadingEditing(false);
+      }
+    }
+    fetchModels();
+  }, [state.settings.editingProvider]);
 
   const handleExport = () => {
     const dateStr = new Date().toISOString().split('T')[0];
@@ -253,6 +271,68 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               />
               <datalist id="chat-model-suggestions">
                 {chatModels.map(m => (
+                  <option key={m.id} value={m.id}>{m.label}</option>
+                ))}
+              </datalist>
+            </div>
+          </div>
+
+          {/* Section: Editing Engine */}
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-gray-100 pb-2">Editing Engine (Analysis Tools)</h3>
+
+            <div className="space-y-3 p-3 bg-white border border-gray-200 rounded-lg">
+              <div>
+                <label className="block text-xs font-semibold text-gray-800 mb-1">AI Provider</label>
+                <select
+                  value={state.settings.editingProvider}
+                  onChange={(e) => {
+                    const newProvider = e.target.value as AppState['settings']['editingProvider'];
+                    let defaultModel = state.settings.editingModel;
+                    if (newProvider === 'gemini') defaultModel = 'gemini-2.5-flash';
+                    if (newProvider === 'anthropic') defaultModel = 'claude-3-5-sonnet-20241022';
+                    if (newProvider === 'openrouter') defaultModel = 'google/gemma-4-31b-it:free';
+                    if (newProvider === 'local') defaultModel = 'local-model';
+
+                    updateSettings({ editingProvider: newProvider, editingModel: defaultModel });
+                  }}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white"
+                >
+                  <option value="gemini">Google Gemini</option>
+                  <option value="anthropic">Anthropic (Claude)</option>
+                  <option value="openrouter">OpenRouter</option>
+                  <option value="local">Local Inference (LM Studio, Ollama, etc.)</option>
+                </select>
+              </div>
+
+              {state.settings.editingProvider === 'local' && (
+                <div className="pt-2 border-t border-gray-100">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Local Inference API URL (Uses same as drafting)</label>
+                  <input
+                    type="text"
+                    value={state.settings.apiUrl}
+                    disabled
+                    className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm bg-gray-50 text-gray-500"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label className="flex justify-between items-center text-xs font-semibold text-gray-500 mb-1">
+                <span>Model Name</span>
+                {loadingEditing && <span className="text-[10px] text-indigo-400 animate-pulse">Fetching...</span>}
+              </label>
+              <input
+                type="text"
+                list="editing-model-suggestions"
+                value={state.settings.editingModel}
+                onChange={(e) => updateSettings({ editingModel: e.target.value })}
+                placeholder="Model ID or Alias"
+                className="w-full px-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+              />
+              <datalist id="editing-model-suggestions">
+                {editingModels.map(m => (
                   <option key={m.id} value={m.id}>{m.label}</option>
                 ))}
               </datalist>

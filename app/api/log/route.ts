@@ -22,6 +22,9 @@ MODEL:     ${data.model}
 MESSAGES:
 ${JSON.stringify(data.messages, null, 2)}
 =========================================
+RESPONSE:
+${data.response || ''}
+=========================================
 `;
     
     fs.appendFileSync(logFile, logEntry, 'utf8');

@@ -2,14 +2,15 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/lib/store';
-import { generateSynopsis, generateCharacters, generateOutline, continueOutline, generateChapter, generateTitle, generateInlineEdit } from '@/lib/inference';
+import { generateSynopsis, generateCharacters, generateOutline, continueOutline, generateChapter, generateTitle, generateInlineEdit, generateStorySoFarUpdate } from '@/lib/inference';
 import { Loader2, Play, Check, ChevronRight, ChevronDown, FileText, Users, ListTree, BookOpen, PenTool, Wand2, Download, Plus, Trash2, MessageSquare, Layers, User, X } from 'lucide-react';
+import { EditingTab } from './EditingTab';
 
 export function Workspace() {
   const { state, getCurrentProject, updateProject } = useStore();
   const project = getCurrentProject();
   const [loading, setLoading] = useState<string | null>(null);
-  const [activeTab, setActiveTabState] = useState<'foundation' | 'drafting'>(project?.lastActiveTab || 'foundation');
+  const [activeTab, setActiveTabState] = useState<'foundation' | 'drafting' | 'editing'>(project?.lastActiveTab || 'foundation');
   const [selectedChapter, setSelectedChapterState] = useState<number | null>(project?.lastSelectedChapter || null);
   const [error, setError] = useState<string | null>(null);
   const [expandedChars, setExpandedChars] = useState<Record<string, boolean>>({});
@@ -54,7 +55,7 @@ export function Workspace() {
   };
 
   // Setters that also update the project store so state is remembered
-  const setActiveTab = (tab: 'foundation' | 'drafting') => {
+  const setActiveTab = (tab: 'foundation' | 'drafting' | 'editing') => {
     setActiveTabState(tab);
     if (project) updateProject(project.id, { lastActiveTab: tab });
   };
@@ -242,9 +243,27 @@ export function Workspace() {
         project.povType || 'Third Person Limited',
         project.characters,
         previousChapterData,
-        seriesContext
+        seriesContext,
+        project.storySoFar
       );
+
+      // Automatically update the Story So Far
+      let newStorySoFar = project.storySoFar || '';
+      try {
+        newStorySoFar = await generateStorySoFarUpdate(
+          endpointURL,
+          state.settings.draftingModel,
+          effectiveSystemPrompt,
+          project.storySoFar || '',
+          result,
+          state.settings.draftingProvider
+        );
+      } catch (err) {
+        console.error("Failed to update story so far:", err);
+      }
+
       updateProject(project.id, {
+        storySoFar: newStorySoFar,
         chapters: project.chapters.map(c => c.chapterNumber === chapNum ? { ...c, content: result, status: 'drafted' } : c)
       });
     } catch (e: any) {
@@ -303,7 +322,8 @@ export function Workspace() {
         project.synopsis,
         project.characters,
         state.settings.draftingProvider,
-        seriesContext
+        seriesContext,
+        project.storySoFar
       );
       
       setPendingRevision({
@@ -418,6 +438,12 @@ export function Workspace() {
             >
               <PenTool size={14} /> Drafting
             </button>
+            <button
+              onClick={() => setActiveTab('editing')}
+              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === 'editing' ? 'bg-white/60 shadow-sm text-slate-900' : 'text-slate-600 hover:text-slate-900 hover:bg-white/20'}`}
+            >
+              <Wand2 size={14} /> Editing
+            </button>
           </div>
         </div>
       </div>
@@ -456,13 +482,33 @@ export function Workspace() {
                     className="w-full text-sm p-2 border border-white/40 rounded-lg bg-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Genre</label>
+                  <input
+                    type="text"
+                    value={project.genre || ''}
+                    onChange={e => updateProject(project.id, { genre: e.target.value })}
+                    placeholder="e.g. Cowboy Romance, Sci-Fi, Thriller"
+                    className="w-full text-sm p-2 border border-white/40 rounded-lg bg-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  />
+                </div>
                 <div className="md:col-span-2">
                   <label className="block text-xs font-medium text-slate-700 mb-1">System Prompt Override</label>
                   <textarea
                     value={project.systemPrompt || ''}
                     onChange={e => updateProject(project.id, { systemPrompt: e.target.value })}
-                    placeholder={project.seriesId ? "Inheriting from series..." : "Override global system prompt here..."}
-                    className="w-full h-20 text-sm p-2 border border-white/40 rounded-lg bg-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-none"
+                    placeholder={project.seriesId ? "Inheriting from series..." : "Optional: Provide a custom system prompt to override the global defaults for this book."}
+                    className="w-full text-sm p-2 border border-white/40 rounded-lg bg-white/30 min-h-[80px] resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Story So Far / Established Facts</label>
+                  <p className="text-[10px] text-slate-500 mb-2">Track what the reader already knows to prevent the AI from repeating reveals or re-introducing characters in later chapters.</p>
+                  <textarea
+                    value={project.storySoFar || ''}
+                    onChange={e => updateProject(project.id, { storySoFar: e.target.value })}
+                    placeholder="e.g., Wren drives a Subaru. Wyatt fought with his dad. Caleb's face was shown on TV..."
+                    className="w-full text-sm p-2 border border-white/40 rounded-lg bg-white/30 min-h-[100px] resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                   />
                 </div>
               </div>
@@ -1231,6 +1277,10 @@ export function Workspace() {
             <p className="text-slate-600">Complete the Foundation steps to generate an outline before drafting.</p>
             <button onClick={() => setActiveTab('foundation')} className="mt-4 text-sm text-indigo-600 font-medium hover:underline">Go to Foundation</button>
           </div>
+        )}
+
+        {activeTab === 'editing' && (
+          <EditingTab project={project} effectiveSystemPrompt={effectiveSystemPrompt} seriesContext={seriesContext} />
         )}
       </div>
     </div>
