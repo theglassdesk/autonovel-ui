@@ -2,18 +2,36 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/lib/store';
-import { generateSynopsis, generateCharacters, generateOutline, continueOutline, generateChapter, generateTitle } from '@/lib/inference';
-import { Loader2, Play, Check, ChevronRight, ChevronDown, FileText, Users, ListTree, BookOpen, PenTool, Wand2, Download, Plus, Trash2, MessageSquare, Layers, User } from 'lucide-react';
+import { generateSynopsis, generateCharacters, generateOutline, continueOutline, generateChapter, generateTitle, generateInlineEdit, generateStorySoFarUpdate } from '@/lib/inference';
+import { Loader2, Play, Check, ChevronRight, ChevronDown, FileText, Users, ListTree, BookOpen, PenTool, Wand2, Download, Plus, Trash2, MessageSquare, Layers, User, X } from 'lucide-react';
+import { EditingTab } from './EditingTab';
 
 export function Workspace() {
   const { state, getCurrentProject, updateProject } = useStore();
   const project = getCurrentProject();
   const [loading, setLoading] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'foundation' | 'drafting'>('foundation');
-  const [selectedChapter, setSelectedChapter] = useState<number | null>(null);
+  const [activeTab, setActiveTabState] = useState<'foundation' | 'drafting' | 'editing'>(project?.lastActiveTab || 'foundation');
+  const [selectedChapter, setSelectedChapterState] = useState<number | null>(project?.lastSelectedChapter || null);
   const [error, setError] = useState<string | null>(null);
   const [expandedChars, setExpandedChars] = useState<Record<string, boolean>>({});
+  
+  // Inline editing state
+  const [selectionRange, setSelectionRange] = useState<{ start: number; end: number; text: string } | null>(null);
+  const [inlineInstruction, setInlineInstruction] = useState('');
+  const [isInlineEditing, setIsInlineEditing] = useState(false);
+  const [pendingRevision, setPendingRevision] = useState<{ start: number; end: number; newText: string } | null>(null);
+
   const contentRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
+
+  // Sync scroll between textarea and backdrop
+  const handleTextareaScroll = () => {
+    if (textareaRef.current && backdropRef.current) {
+      backdropRef.current.scrollTop = textareaRef.current.scrollTop;
+      backdropRef.current.scrollLeft = textareaRef.current.scrollLeft;
+    }
+  };
 
   // Scroll main view back to top on tab changes
   useEffect(() => {
@@ -34,6 +52,17 @@ export function Workspace() {
       ...prev,
       [charId]: !prev[charId]
     }));
+  };
+
+  // Setters that also update the project store so state is remembered
+  const setActiveTab = (tab: 'foundation' | 'drafting' | 'editing') => {
+    setActiveTabState(tab);
+    if (project) updateProject(project.id, { lastActiveTab: tab });
+  };
+
+  const setSelectedChapter = (chapterNum: number | null) => {
+    setSelectedChapterState(chapterNum);
+    if (project) updateProject(project.id, { lastSelectedChapter: chapterNum });
   };
 
   if (!project) {
@@ -214,9 +243,27 @@ export function Workspace() {
         project.povType || 'Third Person Limited',
         project.characters,
         previousChapterData,
-        seriesContext
+        seriesContext,
+        project.storySoFar
       );
+
+      // Automatically update the Story So Far
+      let newStorySoFar = project.storySoFar || '';
+      try {
+        newStorySoFar = await generateStorySoFarUpdate(
+          endpointURL,
+          state.settings.draftingModel,
+          effectiveSystemPrompt,
+          project.storySoFar || '',
+          result,
+          state.settings.draftingProvider
+        );
+      } catch (err) {
+        console.error("Failed to update story so far:", err);
+      }
+
       updateProject(project.id, {
+        storySoFar: newStorySoFar,
         chapters: project.chapters.map(c => c.chapterNumber === chapNum ? { ...c, content: result, status: 'drafted' } : c)
       });
     } catch (e: any) {
@@ -241,6 +288,71 @@ export function Workspace() {
     } finally {
       setLoading(null);
     }
+  };
+
+  const handleInlineEdit = async () => {
+    if (!selectionRange || !inlineInstruction || !selectedChapter) return;
+    setIsInlineEditing(true);
+    setError(null);
+    try {
+      const endpointURL = state.settings.draftingProvider === 'local' ? state.settings.apiUrl : '/api';
+      
+      const previousChapters = project.chapters
+        .filter(c => c.chapterNumber < selectedChapter && c.status === 'drafted')
+        .map(c => {
+          const outDef = project.outline.find(o => o.chapterNumber === c.chapterNumber);
+          return {
+            chapterNumber: c.chapterNumber,
+            title: outDef?.title || '',
+            summary: outDef?.summary || '',
+            content: c.content
+          };
+        });
+
+      const currentChapter = project.chapters.find(c => c.chapterNumber === selectedChapter);
+      
+      const result = await generateInlineEdit(
+        endpointURL,
+        state.settings.draftingModel,
+        effectiveSystemPrompt,
+        selectionRange.text,
+        inlineInstruction,
+        currentChapter?.content || '',
+        previousChapters,
+        project.synopsis,
+        project.characters,
+        state.settings.draftingProvider,
+        seriesContext,
+        project.storySoFar
+      );
+      
+      setPendingRevision({
+        start: selectionRange.start,
+        end: selectionRange.end,
+        newText: result
+      });
+      setIsInlineEditing(false);
+    } catch (e: any) {
+      setError(e.message);
+      setIsInlineEditing(false);
+    }
+  };
+
+  const acceptRevision = () => {
+    if (!pendingRevision || !selectedChapter) return;
+    const currentChapter = project.chapters.find(c => c.chapterNumber === selectedChapter);
+    if (!currentChapter || !currentChapter.content) return;
+    
+    const newContent = currentChapter.content.substring(0, pendingRevision.start) + 
+      pendingRevision.newText + 
+      currentChapter.content.substring(pendingRevision.end);
+      
+    updateProject(project.id, {
+      chapters: project.chapters.map(c => c.chapterNumber === selectedChapter ? { ...c, content: newContent } : c)
+    });
+    setPendingRevision(null);
+    setSelectionRange(null);
+    setInlineInstruction('');
   };
 
   const handleDownloadDraft = () => {
@@ -326,6 +438,12 @@ export function Workspace() {
             >
               <PenTool size={14} /> Drafting
             </button>
+            <button
+              onClick={() => setActiveTab('editing')}
+              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-all ${activeTab === 'editing' ? 'bg-white/60 shadow-sm text-slate-900' : 'text-slate-600 hover:text-slate-900 hover:bg-white/20'}`}
+            >
+              <Wand2 size={14} /> Editing
+            </button>
           </div>
         </div>
       </div>
@@ -364,13 +482,33 @@ export function Workspace() {
                     className="w-full text-sm p-2 border border-white/40 rounded-lg bg-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                   />
                 </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Genre</label>
+                  <input
+                    type="text"
+                    value={project.genre || ''}
+                    onChange={e => updateProject(project.id, { genre: e.target.value })}
+                    placeholder="e.g. Cowboy Romance, Sci-Fi, Thriller"
+                    className="w-full text-sm p-2 border border-white/40 rounded-lg bg-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  />
+                </div>
                 <div className="md:col-span-2">
                   <label className="block text-xs font-medium text-slate-700 mb-1">System Prompt Override</label>
                   <textarea
                     value={project.systemPrompt || ''}
                     onChange={e => updateProject(project.id, { systemPrompt: e.target.value })}
-                    placeholder={project.seriesId ? "Inheriting from series..." : "Override global system prompt here..."}
-                    className="w-full h-20 text-sm p-2 border border-white/40 rounded-lg bg-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 resize-none"
+                    placeholder={project.seriesId ? "Inheriting from series..." : "Optional: Provide a custom system prompt to override the global defaults for this book."}
+                    className="w-full text-sm p-2 border border-white/40 rounded-lg bg-white/30 min-h-[80px] resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">Story So Far / Established Facts</label>
+                  <p className="text-[10px] text-slate-500 mb-2">Track what the reader already knows to prevent the AI from repeating reveals or re-introducing characters in later chapters.</p>
+                  <textarea
+                    value={project.storySoFar || ''}
+                    onChange={e => updateProject(project.id, { storySoFar: e.target.value })}
+                    placeholder="e.g., Wren drives a Subaru. Wyatt fought with his dad. Caleb's face was shown on TV..."
+                    className="w-full text-sm p-2 border border-white/40 rounded-lg bg-white/30 min-h-[100px] resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
                   />
                 </div>
               </div>
@@ -996,16 +1134,131 @@ export function Workspace() {
                         </div>
                       ) : null}
 
-                      <textarea
-                        value={data?.content || ''}
-                        onChange={(e) => {
-                          updateProject(project.id, {
-                            chapters: project.chapters.map(c => c.chapterNumber === selectedChapter ? { ...c, content: e.target.value } : c)
-                          })
-                        }}
-                        placeholder="Chapter text will appear here..."
-                        className="w-full h-full resize-none outline-none font-serif text-slate-800 text-lg leading-relaxed bg-transparent custom-scrollbar whitespace-pre-wrap"
-                      />
+                      <div className="relative w-full h-full">
+                        {/* Fake Highlight Backdrop */}
+                        <div 
+                          ref={backdropRef}
+                          className="absolute inset-0 w-full h-full font-serif text-lg leading-relaxed whitespace-pre-wrap overflow-hidden text-transparent break-words pointer-events-none"
+                        >
+                          {selectionRange && data?.content ? (
+                            <>
+                              {data.content.substring(0, selectionRange.start)}
+                              <mark className="bg-indigo-200/70 text-transparent rounded-sm">{data.content.substring(selectionRange.start, selectionRange.end)}</mark>
+                              {data.content.substring(selectionRange.end)}
+                            </>
+                          ) : data?.content}
+                        </div>
+
+                        <textarea
+                          ref={textareaRef}
+                          onScroll={handleTextareaScroll}
+                          value={data?.content || ''}
+                          onChange={(e) => {
+                            updateProject(project.id, {
+                              chapters: project.chapters.map(c => c.chapterNumber === selectedChapter ? { ...c, content: e.target.value } : c)
+                            })
+                          }}
+                          onSelect={(e) => {
+                            const target = e.currentTarget;
+                            const start = target.selectionStart;
+                            const end = target.selectionEnd;
+                            if (start !== end && data?.content) {
+                              const text = data.content.substring(start, end);
+                              if (text.trim().length > 0) {
+                                setSelectionRange({ start, end, text });
+                                return;
+                              }
+                            }
+                            if (!isInlineEditing && !pendingRevision) {
+                              setSelectionRange(null);
+                            }
+                          }}
+                          onMouseUp={(e) => {
+                            const target = e.currentTarget;
+                            const start = target.selectionStart;
+                            const end = target.selectionEnd;
+                            if (start !== end && data?.content) {
+                              const text = data.content.substring(start, end);
+                              if (text.trim().length > 0) {
+                                setSelectionRange({ start, end, text });
+                                return;
+                              }
+                            }
+                          }}
+                          placeholder="Chapter text will appear here..."
+                          className="absolute inset-0 w-full h-full resize-none outline-none font-serif text-slate-800 text-lg leading-relaxed bg-transparent custom-scrollbar whitespace-pre-wrap break-words"
+                        />
+                      </div>
+
+                      {/* Inline Edit Panel */}
+                      {selectionRange && !pendingRevision && (
+                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-2xl bg-white rounded-xl shadow-2xl border border-slate-200 p-4 animate-in slide-in-from-bottom-4 duration-200 z-20 flex flex-col gap-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                              Inline Edit Selection ({selectionRange.text.length} chars)
+                            </span>
+                            <button 
+                              onClick={() => setSelectionRange(null)}
+                              className="text-slate-400 hover:text-slate-600 transition-colors"
+                              disabled={isInlineEditing}
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                          <div className="flex gap-2 items-end">
+                            <textarea
+                              value={inlineInstruction}
+                              onChange={e => setInlineInstruction(e.target.value)}
+                              placeholder="E.g., Fix inconsistency with chapter 1..."
+                              className="flex-1 h-12 text-sm p-2 bg-slate-50 border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                              disabled={isInlineEditing}
+                            />
+                            <button
+                              onClick={handleInlineEdit}
+                              disabled={isInlineEditing || !inlineInstruction.trim()}
+                              className="h-12 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors flex items-center justify-center min-w-[100px]"
+                            >
+                              {isInlineEditing ? <Loader2 size={16} className="animate-spin" /> : 'Revise'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Pending Revision Review Panel */}
+                      {pendingRevision && (
+                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[90%] max-w-2xl bg-indigo-50 rounded-xl shadow-2xl border border-indigo-200 p-4 animate-in slide-in-from-bottom-4 duration-200 z-20 flex flex-col gap-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-indigo-600 uppercase tracking-wider flex items-center gap-1">
+                              <Wand2 size={14} /> Review Revision
+                            </span>
+                            <button 
+                              onClick={() => { setPendingRevision(null); setSelectionRange(null); setInlineInstruction(''); }}
+                              className="text-slate-400 hover:text-slate-600 transition-colors"
+                            >
+                              <X size={16} />
+                            </button>
+                          </div>
+                          
+                          <div className="bg-white p-3 rounded-lg text-sm text-slate-800 border border-indigo-100 max-h-40 overflow-y-auto whitespace-pre-wrap font-serif">
+                            {pendingRevision.newText}
+                          </div>
+                          
+                          <div className="flex justify-end gap-2 mt-1">
+                            <button
+                              onClick={() => setPendingRevision(null)}
+                              className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-lg transition-colors"
+                            >
+                              Reject
+                            </button>
+                            <button
+                              onClick={acceptRevision}
+                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                            >
+                              <Check size={16} /> Accept & Replace
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </>
                 );
@@ -1024,6 +1277,10 @@ export function Workspace() {
             <p className="text-slate-600">Complete the Foundation steps to generate an outline before drafting.</p>
             <button onClick={() => setActiveTab('foundation')} className="mt-4 text-sm text-indigo-600 font-medium hover:underline">Go to Foundation</button>
           </div>
+        )}
+
+        {activeTab === 'editing' && (
+          <EditingTab project={project} effectiveSystemPrompt={effectiveSystemPrompt} seriesContext={seriesContext} />
         )}
       </div>
     </div>

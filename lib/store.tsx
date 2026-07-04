@@ -71,6 +71,10 @@ export type NovelProject = {
   penName?: string;
   systemPrompt?: string;
   previousBooksSummary?: string;
+  storySoFar?: string;
+  genre?: string;
+  lastActiveTab?: 'foundation' | 'drafting' | 'editing';
+  lastSelectedChapter?: number | null;
 };
 
 export type AppState = {
@@ -86,6 +90,8 @@ export type AppState = {
     draftingModel: string;
     chatProvider: 'local' | 'gemini' | 'anthropic' | 'openrouter';
     chatModel: string;
+    editingProvider: 'local' | 'gemini' | 'anthropic' | 'openrouter';
+    editingModel: string;
     apiUrl: string;
     systemPrompt: string;
     craftRules: string;
@@ -120,11 +126,13 @@ const defaultSettings = {
   draftingModel: 'gemini-2.5-flash',
   chatProvider: 'gemini' as const,
   chatModel: 'gemini-2.5-flash',
+  editingProvider: 'gemini' as const,
+  editingModel: 'gemini-2.5-flash',
   apiUrl: 'http://127.0.0.1:1234/v1', // LM Studio default
   systemPrompt: 'You are an award-winning novelist writing a gripping book. Respond thoughtfully and adhere closely to the instructions.',
   craftRules: 'Show, don\'t tell. Prioritize sensory details (sight, sound, smell, touch, taste). Ground the reader in the physical space before jumping into dialogue. Ensure character voices are distinct and authentic.',
   antiSlop: 'AVOID these overused AI words and phrases: "tapestry", "testament", "symphony", "labyrinth", "shivers down spine", "let out a breath they didn\'t know they were holding", "eyes flashed", "needless to say", "in a world where", "a dance of", "delve".',
-  antiPatterns: 'AVOID structural AI patterns:\n- Do not end chapters with moralizing summaries, rhetorical questions, or neat wrap-ups.\n- Avoid overly balanced dialogue where everyone speaks in complete, polite paragraphs.\n- Avoid sudden, unearned emotional shifts or overly therapeutic language ("I see you", "your feelings are valid").',
+  antiPatterns: 'AVOID structural AI patterns:\n- Do not end chapters with moralizing summaries, rhetorical questions, or neat wrap-ups.\n- Avoid overly balanced dialogue where everyone speaks in complete, polite paragraphs.\n- Avoid sudden, unearned emotional shifts or overly therapeutic language ("I see you", "your feelings are valid").\n- CONTINUITY: Do NOT re-introduce characters or re-describe their physical traits if they were established in previous chapters.\n- POV CONSTRAINTS: Characters must NOT know things that happened in other POV chapters unless they were explicitly told or it is detailed in the outline.',
   autoSaveToDisk: false
 };
 
@@ -161,6 +169,8 @@ function loadState(): AppState {
         if (typeof parsed.settings.draftingModel === 'undefined') parsed.settings.draftingModel = defaultSettings.draftingModel;
         if (typeof parsed.settings.chatProvider === 'undefined') parsed.settings.chatProvider = defaultSettings.chatProvider;
         if (typeof parsed.settings.chatModel === 'undefined') parsed.settings.chatModel = defaultSettings.chatModel;
+        if (typeof parsed.settings.editingProvider === 'undefined') parsed.settings.editingProvider = defaultSettings.editingProvider;
+        if (typeof parsed.settings.editingModel === 'undefined') parsed.settings.editingModel = defaultSettings.editingModel;
         if (typeof parsed.settings.craftRules === 'undefined') parsed.settings.craftRules = defaultSettings.craftRules;
         if (typeof parsed.settings.antiSlop === 'undefined') parsed.settings.antiSlop = defaultSettings.antiSlop;
         if (typeof parsed.settings.antiPatterns === 'undefined') parsed.settings.antiPatterns = defaultSettings.antiPatterns;
@@ -293,7 +303,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       outlineTemplate: '',
       targetChapterCount: 10,
       povType: 'Third Person Limited',
-      seriesId
+      seriesId,
+      genre: '',
+      lastActiveTab: 'foundation',
+      lastSelectedChapter: null
     };
     
     setState(prev => {

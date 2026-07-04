@@ -14,18 +14,6 @@ export async function generateChatCompletion(
   provider?: string
 ) {
   try {
-    // Fire off async log to local disk
-    fetch('/api/log', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        timestamp: new Date().toISOString(),
-        model,
-        provider,
-        messages
-      })
-    }).catch(e => console.error("Logging error", e));
-
     const res = await fetch(`${apiUrl}/chat/completions`, {
       method: 'POST',
       headers: {
@@ -46,7 +34,22 @@ export async function generateChatCompletion(
     }
 
     const data = await res.json();
-    return data.choices[0]?.message?.content || '';
+    const content = data.choices[0]?.message?.content || '';
+
+    // Log request & response together
+    fetch('/api/log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        timestamp: new Date().toISOString(),
+        model,
+        provider,
+        messages,
+        response: content
+      })
+    }).catch(e => console.error("Logging error", e));
+
+    return content;
   } catch (error: any) {
     console.error("Local Inference Error:", error);
     if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
@@ -58,11 +61,114 @@ export async function generateChatCompletion(
 
 // Helpers for specific tasks
 
+function unescapeRawString(str: string): string {
+  return str
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '\t')
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, '\\');
+}
+
+function cleanEndQuotesAndBraces(str: string): string {
+  let s = str.trim();
+  if (s.endsWith('}')) {
+    s = s.substring(0, s.length - 1).trim();
+  }
+  if (s.endsWith('"') || s.endsWith("'")) {
+    s = s.substring(0, s.length - 1);
+  }
+  return s;
+}
+
+function recoverManuscriptAnalysis(jsonStr: string) {
+  const reportStartPattern = /"report"\s*:\s*"/;
+  const matchStart = jsonStr.match(reportStartPattern);
+  if (!matchStart) {
+    throw new Error("Could not find 'report' field");
+  }
+  const startIdx = matchStart.index! + matchStart[0].length;
+
+  const suggestedEditsIdx = jsonStr.indexOf('suggestedEdits');
+  if (suggestedEditsIdx === -1) {
+    let rawReport = jsonStr.substring(startIdx);
+    rawReport = cleanEndQuotesAndBraces(rawReport);
+    return { report: unescapeRawString(rawReport), suggestedEdits: [] };
+  }
+
+  const contextBefore = jsonStr.substring(Math.max(0, suggestedEditsIdx - 10), suggestedEditsIdx);
+  const isEscaped = contextBefore.includes('\\"');
+
+  let report = "";
+  let suggestedEdits: any[] = [];
+
+  if (isEscaped) {
+    const backslashIdx = jsonStr.lastIndexOf('\\', suggestedEditsIdx);
+    const splitIdx = backslashIdx !== -1 ? backslashIdx : suggestedEditsIdx - 1;
+    
+    const rawReport = jsonStr.substring(startIdx, splitIdx);
+    report = unescapeRawString(rawReport);
+
+    const arrayStartIdx = jsonStr.indexOf('[', suggestedEditsIdx);
+    if (arrayStartIdx !== -1) {
+      let rawSuggested = jsonStr.substring(arrayStartIdx);
+      rawSuggested = cleanEndQuotesAndBraces(rawSuggested);
+      const unescapedSuggested = unescapeRawString(rawSuggested);
+      try {
+        suggestedEdits = JSON5.parse(unescapedSuggested);
+      } catch (e: any) {
+        console.error("Failed to parse unescaped suggestedEdits:", e.message);
+      }
+    }
+  } else {
+    const reportEndPattern = /["']?\s*,\s*["']?suggestedEdits["']?\s*:/;
+    const matchEnd = jsonStr.match(reportEndPattern);
+    if (matchEnd) {
+      const endIdx = matchEnd.index!;
+      const rawReport = jsonStr.substring(startIdx, endIdx);
+      report = unescapeRawString(rawReport);
+
+      const suggestedEditsStartIdx = matchEnd.index! + matchEnd[0].length;
+      let arrayStr = jsonStr.substring(suggestedEditsStartIdx).trim();
+      if (arrayStr.endsWith('}')) {
+        arrayStr = arrayStr.substring(0, arrayStr.length - 1).trim();
+      }
+      try {
+        suggestedEdits = JSON5.parse(arrayStr);
+      } catch (e: any) {
+        if (!arrayStr.startsWith('[')) arrayStr = '[' + arrayStr;
+        if (!arrayStr.endsWith(']')) arrayStr = arrayStr + ']';
+        try {
+          suggestedEdits = JSON5.parse(arrayStr);
+        } catch (e2: any) {
+          console.error("Failed to parse suggestedEdits:", e2.message);
+        }
+      }
+    } else {
+      let rawReport = jsonStr.substring(startIdx);
+      rawReport = cleanEndQuotesAndBraces(rawReport);
+      report = unescapeRawString(rawReport);
+    }
+  }
+
+  return { report, suggestedEdits };
+}
+
 function parseJSONWithRepair(text: string) {
   let jsonStr = text;
-  const match = text.match(/\[[\s\S]*\]/);
-  if (match) {
-    jsonStr = match[0];
+  
+  const firstBrace = text.indexOf('{');
+  const firstBracket = text.indexOf('[');
+  
+  if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+    const lastBrace = text.lastIndexOf('}');
+    if (lastBrace !== -1) {
+      jsonStr = text.substring(firstBrace, lastBrace + 1);
+    }
+  } else if (firstBracket !== -1) {
+    const lastBracket = text.lastIndexOf(']');
+    if (lastBracket !== -1) {
+      jsonStr = text.substring(firstBracket, lastBracket + 1);
+    }
   } else {
     jsonStr = text.replace(/```(?:json)?/gi, '').trim();
   }
@@ -73,11 +179,18 @@ function parseJSONWithRepair(text: string) {
     try {
       return JSON5.parse(jsonStr);
     } catch (err2) {
+      // Try to recover manually
+      try {
+        return recoverManuscriptAnalysis(jsonStr);
+      } catch (recoveryErr) {
+        console.error("Manuscript analysis custom recovery failed:", recoveryErr);
+      }
+
       // Repair truncated array (model cut off before finishing)
-      const firstBracket = jsonStr.indexOf('[');
-      const lastBrace = jsonStr.lastIndexOf('}');
-      if (lastBrace !== -1) {
-        let chopped = jsonStr.substring(firstBracket !== -1 ? firstBracket : 0, lastBrace + 1) + ']';
+      const firstBracketIdx = jsonStr.indexOf('[');
+      const lastBraceIdx = jsonStr.lastIndexOf('}');
+      if (lastBraceIdx !== -1) {
+        let chopped = jsonStr.substring(firstBracketIdx !== -1 ? firstBracketIdx : 0, lastBraceIdx + 1) + ']';
         if (!chopped.startsWith('[')) chopped = '[' + chopped;
         try {
           return JSON5.parse(chopped);
@@ -297,7 +410,8 @@ export async function generateChapter(
   povType?: string,
   characters?: any[],
   previousChapterData?: { title?: string; summary?: string; content?: string },
-  seriesContext?: SeriesContext
+  seriesContext?: SeriesContext,
+  storySoFar?: string
 ) {
   const chapterDef = outline.find(c => c.chapterNumber === chapterNumber);
   if (!chapterDef) throw new Error("Chapter not found in outline");
@@ -307,6 +421,10 @@ export async function generateChapter(
   const seriesString = buildSeriesContextString(seriesContext);
   if (seriesString) {
     userPrompt += `${seriesString}\n\n`;
+  }
+
+  if (storySoFar && storySoFar.trim() !== '') {
+    userPrompt += `--- THE STORY SO FAR (ESTABLISHED FACTS) ---\n${storySoFar}\nCRITICAL INSTRUCTION: Do NOT re-introduce these facts, characters, or physical traits as if they are new. The reader already knows these facts.\n\n`;
   }
 
   let povInstruction = '';
@@ -360,4 +478,190 @@ export async function generateChapter(
   ];
 
   return generateChatCompletion(apiUrl, model, messages, 0.85, undefined, provider);
+}
+
+export async function generateInlineEdit(
+  apiUrl: string,
+  model: string,
+  systemPrompt: string,
+  selectedText: string,
+  instruction: string,
+  fullChapterText: string,
+  previousChapters: { chapterNumber: number; title: string; summary: string; content?: string }[],
+  synopsis: string,
+  characters: any[],
+  provider?: string,
+  seriesContext?: SeriesContext,
+  storySoFar?: string
+) {
+  let userPrompt = '';
+  const seriesString = buildSeriesContextString(seriesContext);
+  if (seriesString) {
+    userPrompt += `${seriesString}\n\n`;
+  }
+
+  if (storySoFar && storySoFar.trim() !== '') {
+    userPrompt += `--- THE STORY SO FAR (ESTABLISHED FACTS) ---\n${storySoFar}\nCRITICAL INSTRUCTION: Do NOT re-introduce these facts, characters, or physical traits as if they are new. The reader already knows these facts.\n\n`;
+  }
+
+  userPrompt += `--- OVERALL NOVEL SYNOPSIS ---\n${synopsis}\n\n`;
+
+  if (characters && characters.length > 0) {
+    userPrompt += `--- CHARACTER PROFILES ---\n${JSON.stringify(characters, null, 2)}\n\n`;
+  }
+
+  if (previousChapters && previousChapters.length > 0) {
+    userPrompt += `--- PREVIOUS CHAPTERS CONTEXT ---\n`;
+    const includeFullText = previousChapters.length <= 5;
+    if (includeFullText) {
+      userPrompt += `Note: Including full text for all ${previousChapters.length} previous chapters.\n\n`;
+    } else {
+      userPrompt += `Note: Including summaries for ${previousChapters.length} previous chapters to preserve context space.\n\n`;
+    }
+
+    for (const ch of previousChapters) {
+      userPrompt += `Chapter ${ch.chapterNumber}: ${ch.title}\nSummary: ${ch.summary}\n`;
+      if (includeFullText && ch.content) {
+        userPrompt += `Content:\n${ch.content}\n`;
+      }
+      userPrompt += `\n`;
+    }
+  }
+
+  userPrompt += `--- CURRENT CHAPTER FULL TEXT ---\n${fullChapterText}\n\n`;
+  
+  userPrompt += `--- INLINE EDIT REQUEST ---\n`;
+  userPrompt += `The user has highlighted the following exact text from the current chapter to be edited/rewritten:\n\n<selection>\n${selectedText}\n</selection>\n\n`;
+  userPrompt += `Here is the user's instruction for this edit:\n<instruction>\n${instruction}\n</instruction>\n\n`;
+  userPrompt += `As an expert editor, please rewrite the highlighted text according to the instruction, ensuring it flows naturally back into the surrounding chapter text. Return ONLY the revised text that should replace the <selection>. Do not include any pleasantries, markdown blocks, or surrounding context—just the raw replacement string.`;
+
+  const messages: Message[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt }
+  ];
+
+  return generateChatCompletion(apiUrl, model, messages, 0.7, undefined, provider);
+}
+
+export async function generateStorySoFarUpdate(
+  apiUrl: string,
+  model: string,
+  systemPrompt: string,
+  currentStorySoFar: string,
+  newChapterContent: string,
+  provider?: string
+) {
+  const userPrompt = `I have just written a new chapter for my novel. I need you to update the "Story So Far" tracking document.
+
+--- CURRENT STORY SO FAR ---
+${currentStorySoFar || "(Empty. This is the first chapter.)"}
+
+--- NEW CHAPTER ---
+${newChapterContent}
+
+--- INSTRUCTIONS ---
+Extract any major new established facts, character reveals, physical descriptions (e.g., cars they drive, outfits they usually wear), or key plot points from the NEW CHAPTER. 
+Combine them with the CURRENT STORY SO FAR into a concise, bulleted list. 
+Do NOT summarize the entire plot beat-by-beat. Focus ONLY on permanent "facts" the reader has learned so that future chapters don't re-explain them.
+Return ONLY the updated bulleted list. Do not include any pleasantries or markdown blocks.`;
+
+  const messages: Message[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt }
+  ];
+
+  return generateChatCompletion(apiUrl, model, messages, 0.5, undefined, provider);
+}
+
+export async function analyzeManuscript(
+  apiUrl: string,
+  model: string,
+  systemPrompt: string,
+  project: any,
+  chapters: any[],
+  toolType: string,
+  provider?: string,
+  seriesContext?: SeriesContext,
+  genre?: string,
+  antiSlop?: string
+) {
+  let userPrompt = '';
+  
+  // Include Series Bible & Story So Far only for Inconsistencies or Full analysis
+  if (toolType === 'inconsistencies' || toolType === 'full') {
+    const seriesString = buildSeriesContextString(seriesContext);
+    if (seriesString) userPrompt += `${seriesString}\n\n`;
+    if (project.storySoFar) userPrompt += `--- THE STORY SO FAR (ESTABLISHED FACTS) ---\n${project.storySoFar}\n\n`;
+  }
+
+  // Include Anti-Slop (Banned Words) only for cliches
+  if (toolType === 'cliches' && antiSlop) {
+    userPrompt += `--- BANNED WORDS & PHRASES (ANTI-SLOP) ---\n${antiSlop}\n\n`;
+  }
+
+  userPrompt += `--- MANUSCRIPT ---\n`;
+  for (const ch of chapters) {
+    userPrompt += `[CHAPTER ${ch.chapterNumber}]\n${ch.content}\n\n`;
+  }
+  
+  userPrompt += `--- ANALYSIS REQUEST ---\n`;
+  
+  let toolInstruction = '';
+  switch(toolType) {
+      case 'readability':
+          toolInstruction = 'Analyze the reading level, flow, sentence variety, and word choice. Suggest specific ways to improve readability.';
+          break;
+      case 'pacing':
+          toolInstruction = 'Analyze the narrative pacing. Identify scenes that drag or feel rushed. Suggest edits to improve the speed and rhythm of the story.';
+          break;
+      case 'dialogue':
+          toolInstruction = 'Analyze the balance between dialogue and narrative/action. Identify overly long monologues or "white room" syndrome (dialogue without grounding action).';
+          break;
+      case 'cliches':
+          toolInstruction = 'Identify any overused tropes, cliches, or repetitive AI-like phrasing (comparing against the Anti-Slop list if provided). Suggest fresh, original alternatives.';
+          break;
+      case 'repetitiveness':
+          toolInstruction = 'Identify any repeated reveals, character descriptions, or redundant facts across the chapters.';
+          break;
+      case 'inconsistencies':
+          toolInstruction = 'Check for internal inconsistencies in character logic, physical descriptions, timelines, or plot holes against the Story So Far and Series Context.';
+          break;
+      case 'grammar':
+          toolInstruction = 'Check for spelling, grammar, punctuation errors, and awkward phrasing.';
+          break;
+      case 'full':
+          toolInstruction = 'Provide a comprehensive developmental and line-editing analysis covering all aspects: pacing, readability, dialogue, cliches, inconsistencies, and grammar.';
+          break;
+  }
+
+  userPrompt += `Perform the following analysis on the manuscript: ${toolInstruction}\n\n`;
+  userPrompt += `You must return your response as a valid JSON object matching this exact schema:
+{
+  "report": "A detailed markdown-formatted analysis report. Use headings and bullet points.",
+  "suggestedEdits": [
+    {
+      "chapterNumber": 1,
+      "originalText": "The exact original text from the manuscript that needs changing (must match character for character).",
+      "newText": "The improved replacement text.",
+      "explanation": "Why this edit improves the manuscript."
+    }
+  ]
+}
+Return ONLY the raw JSON object. Do not wrap it in markdown code blocks.`;
+
+  const editorSystemPrompt = `You are an expert developmental book editor and copyeditor analyzing a manuscript for a ${genre || 'fiction'} novel.`;
+
+  const messages: Message[] = [
+    { role: 'system', content: editorSystemPrompt },
+    { role: 'user', content: userPrompt }
+  ];
+
+  const response = await generateChatCompletion(apiUrl, model, messages, 0.7, undefined, provider);
+  
+  try {
+    return parseJSONWithRepair(response);
+  } catch (e) {
+    console.error("Analyze Manuscript JSON parse error:", response);
+    throw new Error(`Failed to parse analysis JSON. Raw response:\n${response.substring(0, 200)}...`);
+  }
 }
