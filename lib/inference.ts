@@ -629,6 +629,9 @@ export async function analyzeManuscript(
       case 'grammar':
           toolInstruction = 'Check for spelling, grammar, punctuation errors, and awkward phrasing.';
           break;
+      case 'betaReader':
+          toolInstruction = `Act as a beta reader matching the target audience for a ${genre || 'fiction'} novel. Provide overall reader feedback and critique. Highlight specific scenes, paragraphs, or character actions where the reader is likely to lose interest, get bored, feel disconnected, or stop reading entirely. Explain why these issues occur and how they affect reader engagement.`;
+          break;
       case 'full':
           toolInstruction = 'Provide a comprehensive developmental and line-editing analysis covering all aspects: pacing, readability, dialogue, cliches, inconsistencies, and grammar.';
           break;

@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { NovelProject, useStore } from '@/lib/store';
-import { Loader2, BookOpen, Activity, MessageSquare, Zap, Repeat, Search, CheckCircle, Wand2, Check, X, Download } from 'lucide-react';
+import { Loader2, BookOpen, Activity, MessageSquare, Zap, Repeat, Search, CheckCircle, Wand2, Check, X, Download, UserCheck } from 'lucide-react';
 import { analyzeManuscript } from '@/lib/inference';
 
 interface Token {
@@ -334,7 +334,7 @@ type EditingTabProps = {
   seriesContext: any;
 };
 
-type ToolType = 'readability' | 'pacing' | 'dialogue' | 'cliches' | 'repetitiveness' | 'inconsistencies' | 'grammar' | 'full';
+type ToolType = 'readability' | 'pacing' | 'dialogue' | 'cliches' | 'repetitiveness' | 'inconsistencies' | 'grammar' | 'betaReader' | 'full';
 
 export function EditingTab({ project, effectiveSystemPrompt, seriesContext }: EditingTabProps) {
   const { state, updateProject } = useStore();
@@ -460,7 +460,8 @@ export function EditingTab({ project, effectiveSystemPrompt, seriesContext }: Ed
     { id: 'cliches', label: 'Cliches', icon: Zap, desc: 'Find and rewrite overused tropes.' },
     { id: 'repetitiveness', label: 'Repetitiveness', icon: Repeat, desc: 'Find repeated words and reveals.' },
     { id: 'inconsistencies', label: 'Inconsistencies', icon: Search, desc: 'Check against the Story So Far.' },
-    { id: 'grammar', label: 'Spelling & Grammar', icon: CheckCircle, desc: 'Fix mechanical errors.' }
+    { id: 'grammar', label: 'Spelling & Grammar', icon: CheckCircle, desc: 'Fix mechanical errors.' },
+    { id: 'betaReader', label: 'Beta Reader', icon: UserCheck, desc: 'Get genre-specific audience feedback and identify drop-off risks.' }
   ] as const;
 
   if (draftedChapters.length === 0) {
