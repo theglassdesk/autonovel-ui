@@ -251,15 +251,17 @@ export async function generateTitle(apiUrl: string, model: string, systemPrompt:
   return response.replace(/["']/g, '').trim();
 }
 
-export async function generateCharacters(apiUrl: string, model: string, systemPrompt: string, synopsis: string, provider?: string, seriesContext?: SeriesContext) {
+export async function generateCharacters(apiUrl: string, model: string, systemPrompt: string, synopsis: string, provider?: string, seriesContext?: SeriesContext, isFromBible?: boolean) {
+  const sourceType = isFromBible ? 'series bible (premise, lore, and world details)' : 'synopsis';
+  const sourceLabel = isFromBible ? 'Series Bible' : 'Synopsis';
   const messages: Message[] = [
     { role: 'system', content: PLANNING_SYSTEM_PROMPT },
     {
-      role: 'user', content: `Based on the following synopsis, create a list of EXACTLY 8 to 10 main and supporting characters.
+      role: 'user', content: `Based on the following ${sourceType}, create a list of EXACTLY 8 to 10 main and supporting characters.
 
-Since the synopsis only mentions a few characters by name, you MUST invent additional characters (such as Wyatt's unnamed brothers, ranch hands, Mariposa townspeople, or local rivals) to build out the story world and bring the total character count to between 8 and 10.${buildSeriesContextString(seriesContext)}
+Since the source text might only mention a few characters by name, you MUST invent additional characters (such as rivals, associates, townspeople, or family members) to build out the story world and bring the total character count to between 8 and 10.${buildSeriesContextString(seriesContext)}
 
-Synopsis:
+${sourceLabel}:
 ${synopsis}
 
 For each character, you must provide the following details:
@@ -280,7 +282,7 @@ Format your response EXACTLY as a JSON array of 8 to 10 objects with the exact k
 
 IMPORTANT: Make sure all JSON strings are valid. If you need to write quotation marks inside any string value, use single quotes (e.g. 'Bull') instead of unescaped double quotes.` }
   ];
-  const response = await generateChatCompletion(apiUrl, model, messages, 0.7, 4000, provider);
+  const response = await generateChatCompletion(apiUrl, model, messages, 0.7, undefined, provider);
   try {
     return parseJSONWithRepair(response);
   } catch (e) {
@@ -466,10 +468,12 @@ export async function generateChapter(
     userPrompt += `--- CRITICAL WRITING GUARDRAILS ---\nYou MUST strictly adhere to the following rules while writing this chapter:\n\nCRAFT GUIDELINES:\n${guardrails.craft}\n\nBANNED WORDS (DO NOT USE THESE WORDS/PHRASES):\n${guardrails.antiSlop}\n\nANTI-PATTERNS (AVOID THESE STRUCTURES):\n${guardrails.antiPatterns}\n\n---------------------------------------\n\n`;
   }
 
+  const lengthInstruction = `\n\nCRITICAL LENGTH REQUIREMENT: Write a highly detailed, long-form chapter of **at least 2,500 words**. Pace the narrative slowly: write scenes out in real-time, expand conversations with physical beats and internal monologue, and describe the environment in detail. Do NOT summarize events or skip ahead.`;
+
   if (existingContent && existingContent.trim() !== '') {
-    userPrompt += `Please rewrite the following chapter based on the rules above and the summary below.\n\nWrite Chapter ${chapterNumber}: "${chapterDef.title}".\n\nChapter Summary: ${chapterDef.summary}\n\nOverall Novel Synopsis: ${synopsis}\n\nEnsure the chapter is well-written, engaging, and flows naturally. Do not include any out-of-character AI pleasantries. Begin the text immediately.\n\n--- EXISTING CHAPTER DRAFT TO REWRITE ---\n${existingContent}`;
+    userPrompt += `Please rewrite the following chapter based on the rules above and the summary below.${lengthInstruction}\n\nWrite Chapter ${chapterNumber}: "${chapterDef.title}".\n\nChapter Summary: ${chapterDef.summary}\n\nOverall Novel Synopsis: ${synopsis}\n\nEnsure the chapter is well-written, engaging, and flows naturally. Do not include any out-of-character AI pleasantries. Begin the text immediately.\n\n--- EXISTING CHAPTER DRAFT TO REWRITE ---\n${existingContent}`;
   } else {
-    userPrompt += `Write Chapter ${chapterNumber}: "${chapterDef.title}".\n\nChapter Summary: ${chapterDef.summary}\n\nOverall Novel Synopsis: ${synopsis}\n\nEnsure the chapter is well-written, engaging, and flows naturally. Do not include any out-of-character AI pleasantries. Begin the text immediately.`;
+    userPrompt += `Write Chapter ${chapterNumber}: "${chapterDef.title}".\n\nChapter Summary: ${chapterDef.summary}\n\nOverall Novel Synopsis: ${synopsis}\n\nEnsure the chapter is well-written, engaging, and flows naturally. Do not include any out-of-character AI pleasantries. Begin the text immediately.${lengthInstruction}`;
   }
 
   const messages: Message[] = [

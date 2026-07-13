@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/lib/store';
 import { generateSynopsis, generateCharacters, generateOutline, continueOutline, generateChapter, generateTitle, generateInlineEdit, generateStorySoFarUpdate } from '@/lib/inference';
-import { Loader2, Play, Check, ChevronRight, ChevronDown, FileText, Users, ListTree, BookOpen, PenTool, Wand2, Download, Plus, Trash2, MessageSquare, Layers, User, X } from 'lucide-react';
+import { Loader2, Play, Check, ChevronRight, ChevronDown, FileText, Users, ListTree, BookOpen, PenTool, Wand2, Download, Plus, Trash2, MessageSquare, Layers, User, X, Library } from 'lucide-react';
 import { EditingTab } from './EditingTab';
 
 export function Workspace() {
@@ -14,7 +14,7 @@ export function Workspace() {
   const [selectedChapter, setSelectedChapterState] = useState<number | null>(project?.lastSelectedChapter || null);
   const [error, setError] = useState<string | null>(null);
   const [expandedChars, setExpandedChars] = useState<Record<string, boolean>>({});
-  
+
   // Inline editing state
   const [selectionRange, setSelectionRange] = useState<{ start: number; end: number; text: string } | null>(null);
   const [inlineInstruction, setInlineInstruction] = useState('');
@@ -102,6 +102,44 @@ export function Workspace() {
     try {
       const endpointURL = state.settings.draftingProvider === 'local' ? state.settings.apiUrl : '/api';
       const result = await generateCharacters(endpointURL, state.settings.draftingModel, effectiveSystemPrompt, project.synopsis, state.settings.draftingProvider, seriesContext);
+      const charactersWithIds = result.map((c: any) => ({
+        id: c.id || crypto.randomUUID(),
+        name: c.name || '',
+        role: c.role || '',
+        description: c.description || '',
+        identity: c.identity || '',
+        physicalDescription: c.physicalDescription || '',
+        distinctFeatures: c.distinctFeatures || '',
+        coreValues: c.coreValues || '',
+        flaws: c.flaws || '',
+        fears: c.fears || '',
+        want: c.want || '',
+        need: c.need || '',
+        lie: c.lie || '',
+      }));
+      updateProject(project.id, { characters: charactersWithIds });
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleGenerateCharactersFromBible = async () => {
+    if (!series || !series.premise) return;
+    setLoading('characters');
+    setError(null);
+    try {
+      const endpointURL = state.settings.draftingProvider === 'local' ? state.settings.apiUrl : '/api';
+      const result = await generateCharacters(
+        endpointURL,
+        state.settings.draftingModel,
+        effectiveSystemPrompt,
+        series.premise,
+        state.settings.draftingProvider,
+        seriesContext,
+        true
+      );
       const charactersWithIds = result.map((c: any) => ({
         id: c.id || crypto.randomUUID(),
         name: c.name || '',
@@ -296,7 +334,7 @@ export function Workspace() {
     setError(null);
     try {
       const endpointURL = state.settings.draftingProvider === 'local' ? state.settings.apiUrl : '/api';
-      
+
       const previousChapters = project.chapters
         .filter(c => c.chapterNumber < selectedChapter && c.status === 'drafted')
         .map(c => {
@@ -310,7 +348,7 @@ export function Workspace() {
         });
 
       const currentChapter = project.chapters.find(c => c.chapterNumber === selectedChapter);
-      
+
       const result = await generateInlineEdit(
         endpointURL,
         state.settings.draftingModel,
@@ -325,7 +363,7 @@ export function Workspace() {
         seriesContext,
         project.storySoFar
       );
-      
+
       setPendingRevision({
         start: selectionRange.start,
         end: selectionRange.end,
@@ -342,11 +380,11 @@ export function Workspace() {
     if (!pendingRevision || !selectedChapter) return;
     const currentChapter = project.chapters.find(c => c.chapterNumber === selectedChapter);
     if (!currentChapter || !currentChapter.content) return;
-    
-    const newContent = currentChapter.content.substring(0, pendingRevision.start) + 
-      pendingRevision.newText + 
+
+    const newContent = currentChapter.content.substring(0, pendingRevision.start) +
+      pendingRevision.newText +
       currentChapter.content.substring(pendingRevision.end);
-      
+
     updateProject(project.id, {
       chapters: project.chapters.map(c => c.chapterNumber === selectedChapter ? { ...c, content: newContent } : c)
     });
@@ -406,8 +444,8 @@ export function Workspace() {
             onClick={handleGenerateTitle}
             disabled={loading === 'title' || !project.synopsis}
             className={`ml-2 p-1.5 shrink-0 rounded transition-colors ${!project.synopsis || loading === 'title'
-                ? 'text-slate-400 cursor-not-allowed opacity-40'
-                : 'text-indigo-500 hover:bg-white/40 hover:text-indigo-600'
+              ? 'text-slate-400 cursor-not-allowed opacity-40'
+              : 'text-indigo-500 hover:bg-white/40 hover:text-indigo-600'
               }`}
             title={!project.synopsis ? "Generate synopsis first to suggest title" : "Suggest Title"}
           >
@@ -526,7 +564,7 @@ export function Workspace() {
                 placeholder="What is your novel about? (e.g. A young programmer discovers her code can alter reality...)"
                 className="w-full h-24 p-3 border border-white/40 rounded-lg text-sm bg-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white/60 shadow-sm resize-none"
               />
-              
+
               {project.seriesId && (
                 <div className="mt-4">
                   <div className="flex items-center gap-2 mb-2">
@@ -541,7 +579,7 @@ export function Workspace() {
                   />
                 </div>
               )}
-              
+
               <div className="flex justify-end mt-2">
                 <button
                   onClick={handleGenerateSynopsis}
@@ -566,7 +604,17 @@ export function Workspace() {
                   onChange={e => updateProject(project.id, { synopsis: e.target.value })}
                   className="w-full h-48 p-3 border border-white/40 rounded-lg text-sm bg-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:bg-white/60 shadow-sm resize-none"
                 />
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-3 flex-wrap">
+                  {series && series.premise && (
+                    <button
+                      onClick={handleGenerateCharactersFromBible}
+                      disabled={loading === 'characters'}
+                      className="flex items-center gap-2 px-4 py-2 bg-white/50 hover:bg-white/80 border border-slate-200/50 shadow-sm text-slate-800 text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
+                    >
+                      {loading === 'characters' ? <Loader2 size={16} className="animate-spin" /> : <Library size={16} />}
+                      Generate Characters from Series Bible
+                    </button>
+                  )}
                   <button
                     onClick={handleGenerateCharacters}
                     disabled={loading === 'characters' || !project.synopsis}
@@ -580,7 +628,7 @@ export function Workspace() {
             )}
 
             {/* Step 3: Characters */}
-            {project.synopsis && (
+            {(project.synopsis || (series && series.premise)) && (
               <section className="space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-500">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -623,10 +671,20 @@ export function Workspace() {
                   <div className="p-8 border border-dashed border-white/60 rounded-xl bg-white/10 text-center">
                     <Users className="mx-auto h-8 w-8 text-slate-400 mb-2 opacity-50" />
                     <p className="text-xs text-slate-600 mb-4">No characters defined for this novel yet.</p>
-                    <div className="flex justify-center gap-3">
+                    <div className="flex justify-center gap-3 flex-wrap">
+                      {series && series.premise && (
+                        <button
+                          onClick={handleGenerateCharactersFromBible}
+                          disabled={loading === 'characters'}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-white/50 hover:bg-white/80 border border-slate-200/50 text-slate-800 text-xs font-medium rounded-lg disabled:opacity-50 transition-colors shadow-sm"
+                        >
+                          {loading === 'characters' ? <Loader2 size={12} className="animate-spin" /> : <Library size={12} />}
+                          Generate from Series Bible
+                        </button>
+                      )}
                       <button
                         onClick={handleGenerateCharacters}
-                        disabled={loading === 'characters'}
+                        disabled={loading === 'characters' || !project.synopsis}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-lg disabled:opacity-50 transition-colors shadow-sm"
                       >
                         {loading === 'characters' ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
@@ -1094,6 +1152,11 @@ export function Workspace() {
                               updateProject(project.id, { outline: newOutline });
                             }}
                           />
+                          {data?.content && (
+                            <span className="text-xs font-semibold text-slate-500 bg-slate-100 border border-slate-200 rounded px-2 py-0.5 shrink-0 select-none">
+                              {data.content.trim() ? data.content.trim().split(/\s+/).length.toLocaleString() : 0} words
+                            </span>
+                          )}
                         </div>
                         <textarea
                           className="text-xs text-slate-600 w-full resize-none h-16 outline-none bg-transparent border border-transparent hover:border-slate-200 focus:border-indigo-500/30 focus:bg-white/20 p-1 rounded transition-all leading-relaxed"
@@ -1136,7 +1199,7 @@ export function Workspace() {
 
                       <div className="relative w-full h-full">
                         {/* Fake Highlight Backdrop */}
-                        <div 
+                        <div
                           ref={backdropRef}
                           className="absolute inset-0 w-full h-full font-serif text-lg leading-relaxed whitespace-pre-wrap overflow-hidden text-transparent break-words pointer-events-none"
                         >
@@ -1197,7 +1260,7 @@ export function Workspace() {
                             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                               Inline Edit Selection ({selectionRange.text.length} chars)
                             </span>
-                            <button 
+                            <button
                               onClick={() => setSelectionRange(null)}
                               className="text-slate-400 hover:text-slate-600 transition-colors"
                               disabled={isInlineEditing}
@@ -1231,18 +1294,18 @@ export function Workspace() {
                             <span className="text-xs font-semibold text-indigo-600 uppercase tracking-wider flex items-center gap-1">
                               <Wand2 size={14} /> Review Revision
                             </span>
-                            <button 
+                            <button
                               onClick={() => { setPendingRevision(null); setSelectionRange(null); setInlineInstruction(''); }}
                               className="text-slate-400 hover:text-slate-600 transition-colors"
                             >
                               <X size={16} />
                             </button>
                           </div>
-                          
+
                           <div className="bg-white p-3 rounded-lg text-sm text-slate-800 border border-indigo-100 max-h-40 overflow-y-auto whitespace-pre-wrap font-serif">
                             {pendingRevision.newText}
                           </div>
-                          
+
                           <div className="flex justify-end gap-2 mt-1">
                             <button
                               onClick={() => setPendingRevision(null)}
