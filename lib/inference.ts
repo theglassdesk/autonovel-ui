@@ -598,8 +598,8 @@ export async function analyzeManuscript(
     if (project.storySoFar) userPrompt += `--- THE STORY SO FAR (ESTABLISHED FACTS) ---\n${project.storySoFar}\n\n`;
   }
 
-  // Include Anti-Slop (Banned Words) only for cliches
-  if (toolType === 'cliches' && antiSlop) {
+  // Include Anti-Slop (Banned Words) for cliches and AI-isms
+  if ((toolType === 'cliches' || toolType === 'aiIsms') && antiSlop) {
     userPrompt += `--- BANNED WORDS & PHRASES (ANTI-SLOP) ---\n${antiSlop}\n\n`;
   }
 
@@ -623,6 +623,14 @@ export async function analyzeManuscript(
           break;
       case 'cliches':
           toolInstruction = 'Identify any overused tropes, cliches, or repetitive AI-like phrasing (comparing against the Anti-Slop list if provided). Suggest fresh, original alternatives.';
+          break;
+      case 'aiIsms':
+          toolInstruction = 'Identify and correct repetitive, formulaic AI writing patterns ("AI-isms"). Specifically highlight and rewrite:\n' +
+                            '1. The "not X, not Y, but Z" structural trope (e.g. "not with fear, not with anger, but with resolve").\n' +
+                            '2. Double sensory/scent descriptors (e.g. "he smelled of leather and ozone", "scents of pine and old rain").\n' +
+                            '3. Excessive or unnecessary em-dashes (—) used as lazy clause separators.\n' +
+                            '4. General AI tropes, sentence structures, and banned words from the anti-slop list.\n' +
+                            'Suggest natural, human-like rewrites that vary sentence structure.';
           break;
       case 'repetitiveness':
           toolInstruction = 'Identify any repeated reveals, character descriptions, or redundant facts across the chapters.';

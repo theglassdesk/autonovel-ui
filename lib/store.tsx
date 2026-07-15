@@ -43,7 +43,7 @@ export type ChapterData = {
   id: string;
   chapterNumber: number;
   content: string; // The generated text
-  status: 'pending' | 'generating' | 'drafted' | 'revised';
+  status: 'pending' | 'generating' | 'drafted';
 };
 
 export type SeriesProject = {
@@ -210,6 +210,10 @@ function loadState(): AppState {
             want: c.want || '',
             need: c.need || '',
             lie: c.lie || '',
+          })),
+          chapters: (p.chapters || []).map((ch: any) => ({
+            ...ch,
+            status: ch.status === 'revised' ? 'drafted' : ch.status
           }))
         }));
       }

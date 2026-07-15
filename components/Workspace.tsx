@@ -336,7 +336,7 @@ export function Workspace() {
       const endpointURL = state.settings.draftingProvider === 'local' ? state.settings.apiUrl : '/api';
 
       const previousChapters = project.chapters
-        .filter(c => c.chapterNumber < selectedChapter && c.status === 'drafted')
+        .filter(c => c.chapterNumber < selectedChapter && c.content && c.content.trim() !== '')
         .map(c => {
           const outDef = project.outline.find(o => o.chapterNumber === c.chapterNumber);
           return {
@@ -386,7 +386,7 @@ export function Workspace() {
       currentChapter.content.substring(pendingRevision.end);
 
     updateProject(project.id, {
-      chapters: project.chapters.map(c => c.chapterNumber === selectedChapter ? { ...c, content: newContent } : c)
+      chapters: project.chapters.map(c => c.chapterNumber === selectedChapter ? { ...c, content: newContent, status: c.status === 'pending' ? 'drafted' : c.status } : c)
     });
     setPendingRevision(null);
     setSelectionRange(null);
@@ -1169,7 +1169,7 @@ export function Workspace() {
                         />
                       </div>
                       <div className="flex items-center gap-2 pt-0.5">
-                        {data?.status === 'drafted' && data.content && (
+                        {data?.content && data.content.trim() !== '' && (
                           <button
                             onClick={() => handleDownloadChapter(selectedChapter, outDef?.title || 'Draft', data.content)}
                             className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 bg-white/10 border border-white/40 shadow-sm hover:bg-white/30 text-slate-800 text-xs font-medium rounded-lg transition-colors"
@@ -1217,8 +1217,10 @@ export function Workspace() {
                           onScroll={handleTextareaScroll}
                           value={data?.content || ''}
                           onChange={(e) => {
+                            const val = e.target.value;
+                            const status = val.trim() === '' ? 'pending' : (data?.status === 'pending' ? 'drafted' : data?.status || 'drafted');
                             updateProject(project.id, {
-                              chapters: project.chapters.map(c => c.chapterNumber === selectedChapter ? { ...c, content: e.target.value } : c)
+                              chapters: project.chapters.map(c => c.chapterNumber === selectedChapter ? { ...c, content: val, status } : c)
                             })
                           }}
                           onSelect={(e) => {

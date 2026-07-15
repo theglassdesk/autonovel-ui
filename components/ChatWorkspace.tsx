@@ -352,7 +352,7 @@ export function ChatWorkspace() {
             systemPrompt += `\nOutline: ${JSON.stringify(project.outline)}`;
           }
           if (project.chapters && project.chapters.length > 0) {
-            const draftedChapters = project.chapters.filter(c => c.status === 'drafted' && c.content);
+            const draftedChapters = project.chapters.filter(c => c.content && c.content.trim() !== '');
             if (draftedChapters.length > 0) {
               systemPrompt += `\n\nDrafted Chapters:\n`;
               draftedChapters.forEach(ch => {

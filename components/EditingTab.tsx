@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { NovelProject, useStore } from '@/lib/store';
-import { Loader2, BookOpen, Activity, MessageSquare, Zap, Repeat, Search, CheckCircle, Wand2, Check, X, Download, UserCheck } from 'lucide-react';
+import { Loader2, BookOpen, Activity, MessageSquare, Zap, Repeat, Search, CheckCircle, Wand2, Check, X, Download, UserCheck, Cpu } from 'lucide-react';
 import { analyzeManuscript } from '@/lib/inference';
 
 interface Token {
@@ -334,7 +334,7 @@ type EditingTabProps = {
   seriesContext: any;
 };
 
-type ToolType = 'readability' | 'pacing' | 'dialogue' | 'cliches' | 'repetitiveness' | 'inconsistencies' | 'grammar' | 'betaReader' | 'full';
+type ToolType = 'readability' | 'pacing' | 'dialogue' | 'cliches' | 'aiIsms' | 'repetitiveness' | 'inconsistencies' | 'grammar' | 'betaReader' | 'full';
 
 export function EditingTab({ project, effectiveSystemPrompt, seriesContext }: EditingTabProps) {
   const { state, updateProject } = useStore();
@@ -344,12 +344,17 @@ export function EditingTab({ project, effectiveSystemPrompt, seriesContext }: Ed
   const [suggestedEdits, setSuggestedEdits] = useState<{ id: string; originalText: string; newText: string; chapterNumber: number; explanation: string; applied: boolean }[]>([]);
   const [currentTool, setCurrentTool] = useState<ToolType | null>(null);
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+  const [selectedChapterNumber, setSelectedChapterNumber] = useState<number | 'all'>('all');
 
-  const draftedChapters = project.chapters.filter(c => c.status === 'drafted' && c.content);
+  const draftedChapters = project.chapters.filter(c => c.content && c.content.trim() !== '');
+
+  const displayedChapters = selectedChapterNumber === 'all'
+    ? draftedChapters
+    : draftedChapters.filter(c => c.chapterNumber === selectedChapterNumber);
 
   const handleAnalyze = async (tool: ToolType) => {
-    if (draftedChapters.length === 0) {
-      setError("You need to draft at least one chapter before analyzing.");
+    if (displayedChapters.length === 0) {
+      setError("Please select a drafted chapter to analyze.");
       return;
     }
     
@@ -367,7 +372,7 @@ export function EditingTab({ project, effectiveSystemPrompt, seriesContext }: Ed
         state.settings.editingModel,
         effectiveSystemPrompt,
         project,
-        draftedChapters,
+        displayedChapters,
         tool,
         state.settings.editingProvider,
         seriesContext,
@@ -419,14 +424,31 @@ export function EditingTab({ project, effectiveSystemPrompt, seriesContext }: Ed
     setTimeout(() => {
         const chapEl = document.getElementById(`chap-${edit.chapterNumber}`);
         if (chapEl) {
-            chapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            
             const textarea = chapEl.querySelector('textarea') as HTMLTextAreaElement | null;
             if (textarea && matchIndices) {
                 textarea.focus();
                 // Select the new replacement text
                 const newLength = edit.newText.length;
                 textarea.setSelectionRange(matchIndices.start, matchIndices.start + newLength);
+
+                const scrollContainer = chapEl.closest('.overflow-y-auto');
+                if (scrollContainer) {
+                    const relativeOffset = matchIndices.start / (textarea.value.length || 1);
+                    const targetYInsideTextarea = textarea.scrollHeight * relativeOffset;
+                    
+                    const textareaRect = textarea.getBoundingClientRect();
+                    const containerRect = scrollContainer.getBoundingClientRect();
+                    const textareaTopRelativeToContainer = textareaRect.top - containerRect.top + scrollContainer.scrollTop;
+                    
+                    const absoluteTargetY = textareaTopRelativeToContainer + targetYInsideTextarea;
+                    
+                    scrollContainer.scrollTo({
+                        top: absoluteTargetY - (containerRect.height / 2),
+                        behavior: 'smooth'
+                    });
+                }
+            } else {
+                chapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         }
     }, 100);
@@ -451,6 +473,8 @@ export function EditingTab({ project, effectiveSystemPrompt, seriesContext }: Ed
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+    
+    // Auto-save download metadata to the project or trigger cleanups if needed
   };
 
   const tools = [
@@ -458,6 +482,7 @@ export function EditingTab({ project, effectiveSystemPrompt, seriesContext }: Ed
     { id: 'pacing', label: 'Pacing', icon: Activity, desc: 'Check scene length and narrative speed.' },
     { id: 'dialogue', label: 'Dialogue vs. Narrative', icon: MessageSquare, desc: 'Check the balance of dialogue to action.' },
     { id: 'cliches', label: 'Cliches', icon: Zap, desc: 'Find and rewrite overused tropes.' },
+    { id: 'aiIsms', label: 'AI-isms', icon: Cpu, desc: 'Detect and rewrite formulaic AI patterns, em-dash misuse, and repetitive descriptions.' },
     { id: 'repetitiveness', label: 'Repetitiveness', icon: Repeat, desc: 'Find repeated words and reveals.' },
     { id: 'inconsistencies', label: 'Inconsistencies', icon: Search, desc: 'Check against the Story So Far.' },
     { id: 'grammar', label: 'Spelling & Grammar', icon: CheckCircle, desc: 'Fix mechanical errors.' },
@@ -478,13 +503,45 @@ export function EditingTab({ project, effectiveSystemPrompt, seriesContext }: Ed
     <div className="flex flex-col lg:flex-row h-full overflow-hidden bg-white/40 border-t border-white/40 rounded-b-2xl">
       
       {/* Left Panel: Continuous Manuscript */}
-      <div className="flex-1 overflow-y-auto bg-white/60 border-r border-white/40 shadow-sm relative custom-scrollbar">
-        <div className="max-w-3xl mx-auto py-12 px-8 space-y-12">
+      <div className="flex-1 overflow-y-auto bg-white/60 border-r border-white/40 shadow-sm relative custom-scrollbar flex flex-col">
+        {/* Manuscript Scope Toolbar */}
+        <div className="px-8 py-3 bg-white/80 border-b border-white/40 flex items-center justify-between shrink-0 sticky top-0 z-10 backdrop-blur-sm">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Editing Scope:</span>
+              <select
+                value={selectedChapterNumber}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedChapterNumber(val === 'all' ? 'all' : Number(val));
+                }}
+                className="text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-slate-800 font-medium"
+              >
+                <option value="all">Full Manuscript ({draftedChapters.length} chapters)</option>
+                {draftedChapters.map(c => {
+                  const outlineDef = project.outline.find(o => o.chapterNumber === c.chapterNumber);
+                  return (
+                    <option key={c.id} value={c.chapterNumber}>
+                      Chapter {c.chapterNumber}: {outlineDef?.title || 'Untitled'}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          </div>
+          {report && (
+            <span className="text-[10px] text-slate-400 bg-white/60 px-2 py-1 rounded border border-slate-200/50">
+              Analysis generated for: {selectedChapterNumber === 'all' ? 'Full Manuscript' : `Chapter ${selectedChapterNumber}`}
+            </span>
+          )}
+        </div>
+
+        <div className="max-w-3xl mx-auto py-12 px-8 space-y-12 flex-1 w-full">
             <div className="text-center mb-8">
                 <h1 className="text-3xl font-serif font-bold text-slate-800">{project.title || 'Untitled Manuscript'}</h1>
             </div>
             
-            {draftedChapters.map((chapter) => {
+            {displayedChapters.map((chapter) => {
                 const outlineDef = project.outline.find(o => o.chapterNumber === chapter.chapterNumber);
                 return (
                     <div key={chapter.id} className="relative group scroll-mt-8" id={`chap-${chapter.chapterNumber}`}>
@@ -613,9 +670,9 @@ export function EditingTab({ project, effectiveSystemPrompt, seriesContext }: Ed
 
                 {/* Tooltip */}
                 <div className="absolute right-full mr-2.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 flex items-center">
-                    <div className="bg-slate-900/95 backdrop-blur-sm text-white text-[11px] rounded-lg px-3 py-1.5 shadow-xl flex flex-col items-start gap-0.5 border border-slate-800">
+                    <div className="w-48 bg-slate-900/95 backdrop-blur-sm text-white text-[11px] rounded-lg px-3 py-1.5 shadow-xl flex flex-col items-start gap-0.5 border border-slate-800">
                         <span className="font-semibold text-slate-100 whitespace-nowrap">Full Analysis</span>
-                        <span className="text-[10px] text-slate-400 font-normal leading-normal whitespace-nowrap">Generate Full Analysis</span>
+                        <span className="text-[10px] text-slate-400 font-normal leading-normal">Generate Full Analysis</span>
                     </div>
                     <div className="w-1.5 h-1.5 bg-slate-900/95 rotate-45 -ml-[3px] border-r border-t border-slate-800" />
                 </div>
@@ -648,9 +705,9 @@ export function EditingTab({ project, effectiveSystemPrompt, seriesContext }: Ed
 
                             {/* Tooltip */}
                             <div className="absolute right-full mr-2.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50 flex items-center">
-                                <div className="bg-slate-900/95 backdrop-blur-sm text-white text-[11px] rounded-lg px-3 py-1.5 shadow-xl flex flex-col items-start gap-0.5 border border-slate-800">
+                                <div className="w-48 bg-slate-900/95 backdrop-blur-sm text-white text-[11px] rounded-lg px-3 py-1.5 shadow-xl flex flex-col items-start gap-0.5 border border-slate-800">
                                     <span className="font-semibold text-slate-100 whitespace-nowrap">{tool.label}</span>
-                                    <span className="text-[10px] text-slate-400 font-normal leading-normal whitespace-nowrap">{tool.desc}</span>
+                                    <span className="text-[10px] text-slate-400 font-normal leading-normal">{tool.desc}</span>
                                 </div>
                                 <div className="w-1.5 h-1.5 bg-slate-900/95 rotate-45 -ml-[3px] border-r border-t border-slate-800" />
                             </div>
