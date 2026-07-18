@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from 'react';
 import { NovelProject, useStore } from '@/lib/store';
-import { Loader2, BookOpen, Activity, MessageSquare, Zap, Repeat, Search, CheckCircle, Wand2, Check, X, Download, UserCheck, Cpu } from 'lucide-react';
+import { Loader2, BookOpen, Activity, MessageSquare, Zap, Repeat, Search, CheckCircle, Wand2, Check, X, Download, UserCheck, Cpu, FileText } from 'lucide-react';
 import { analyzeManuscript } from '@/lib/inference';
 
 interface Token {
@@ -334,7 +334,7 @@ type EditingTabProps = {
   seriesContext: any;
 };
 
-type ToolType = 'readability' | 'pacing' | 'dialogue' | 'cliches' | 'aiIsms' | 'repetitiveness' | 'inconsistencies' | 'grammar' | 'betaReader' | 'full';
+type ToolType = 'readability' | 'pacing' | 'dialogue' | 'cliches' | 'aiIsms' | 'repetitiveness' | 'inconsistencies' | 'grammar' | 'betaReader' | 'proseMatch' | 'full';
 
 export function EditingTab({ project, effectiveSystemPrompt, seriesContext }: EditingTabProps) {
   const { state, updateProject } = useStore();
@@ -355,6 +355,11 @@ export function EditingTab({ project, effectiveSystemPrompt, seriesContext }: Ed
   const handleAnalyze = async (tool: ToolType) => {
     if (displayedChapters.length === 0) {
       setError("Please select a drafted chapter to analyze.");
+      return;
+    }
+
+    if (tool === 'proseMatch' && !project.sampleProse?.trim()) {
+      setError("Please add Sample Prose in the Book Settings (Foundation tab) before running the Prose Style Match analysis.");
       return;
     }
     
@@ -485,6 +490,7 @@ export function EditingTab({ project, effectiveSystemPrompt, seriesContext }: Ed
     { id: 'aiIsms', label: 'AI-isms', icon: Cpu, desc: 'Detect and rewrite formulaic AI patterns, em-dash misuse, and repetitive descriptions.' },
     { id: 'repetitiveness', label: 'Repetitiveness', icon: Repeat, desc: 'Find repeated words and reveals.' },
     { id: 'inconsistencies', label: 'Inconsistencies', icon: Search, desc: 'Check against the Story So Far.' },
+    { id: 'proseMatch', label: 'Prose Style Match', icon: FileText, desc: 'Compare text structure and voice to the sample prose.' },
     { id: 'grammar', label: 'Spelling & Grammar', icon: CheckCircle, desc: 'Fix mechanical errors.' },
     { id: 'betaReader', label: 'Beta Reader', icon: UserCheck, desc: 'Get genre-specific audience feedback and identify drop-off risks.' }
   ] as const;

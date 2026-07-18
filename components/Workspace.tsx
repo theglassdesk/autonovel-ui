@@ -1,11 +1,11 @@
 'use client';
-
-import React, { useState, useRef, useEffect } from 'react';
+ 
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useStore } from '@/lib/store';
-import { generateSynopsis, generateCharacters, generateOutline, continueOutline, generateChapter, generateTitle, generateInlineEdit, generateStorySoFarUpdate } from '@/lib/inference';
+import { generateSynopsis, generateCharacters, generateOutline, continueOutline, generateChapter, generateChapterBeats, generateTitle, generateInlineEdit, generateStorySoFarUpdate } from '@/lib/inference';
 import { Loader2, Play, Check, ChevronRight, ChevronDown, FileText, Users, ListTree, BookOpen, PenTool, Wand2, Download, Plus, Trash2, MessageSquare, Layers, User, X, Library } from 'lucide-react';
 import { EditingTab } from './EditingTab';
-
+ 
 export function Workspace() {
   const { state, getCurrentProject, updateProject } = useStore();
   const project = getCurrentProject();
@@ -14,12 +14,20 @@ export function Workspace() {
   const [selectedChapter, setSelectedChapterState] = useState<number | null>(project?.lastSelectedChapter || null);
   const [error, setError] = useState<string | null>(null);
   const [expandedChars, setExpandedChars] = useState<Record<string, boolean>>({});
-
+  const [isSettingsExpanded, setIsSettingsExpanded] = useState(false);
+ 
   // Inline editing state
   const [selectionRange, setSelectionRange] = useState<{ start: number; end: number; text: string } | null>(null);
   const [inlineInstruction, setInlineInstruction] = useState('');
   const [isInlineEditing, setIsInlineEditing] = useState(false);
   const [pendingRevision, setPendingRevision] = useState<{ start: number; end: number; newText: string } | null>(null);
+
+  // 2-step drafting state
+  const [showBeatModal, setShowBeatModal] = useState(false);
+  const [beatDraftingChapter, setBeatDraftingChapter] = useState<number | null>(null);
+  const [beatsLoading, setBeatsLoading] = useState(false);
+  const [generatedBeats, setGeneratedBeats] = useState("");
+  const [beatsError, setBeatsError] = useState<string | null>(null);
 
   const contentRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -33,6 +41,11 @@ export function Workspace() {
     }
   };
 
+  const setSelectedChapter = useCallback((chapterNum: number | null) => {
+    setSelectedChapterState(chapterNum);
+    if (project) updateProject(project.id, { lastSelectedChapter: chapterNum });
+  }, [project, updateProject]);
+
   // Scroll main view back to top on tab changes
   useEffect(() => {
     if (contentRef.current) {
@@ -43,9 +56,12 @@ export function Workspace() {
   // Auto-select first chapter when entering drafting mode if none selected yet
   useEffect(() => {
     if (activeTab === 'drafting' && !selectedChapter && project?.outline && project.outline.length > 0) {
-      setSelectedChapter(project.outline[0].chapterNumber);
+      const timer = setTimeout(() => {
+        setSelectedChapter(project.outline[0].chapterNumber);
+      }, 0);
+      return () => clearTimeout(timer);
     }
-  }, [activeTab, project?.outline, selectedChapter]);
+  }, [activeTab, project?.outline, selectedChapter, setSelectedChapter]);
 
   const toggleCharExpand = (charId: string) => {
     setExpandedChars(prev => ({
@@ -58,11 +74,6 @@ export function Workspace() {
   const setActiveTab = (tab: 'foundation' | 'drafting' | 'editing') => {
     setActiveTabState(tab);
     if (project) updateProject(project.id, { lastActiveTab: tab });
-  };
-
-  const setSelectedChapter = (chapterNum: number | null) => {
-    setSelectedChapterState(chapterNum);
-    if (project) updateProject(project.id, { lastSelectedChapter: chapterNum });
   };
 
   if (!project) {
@@ -238,7 +249,59 @@ export function Workspace() {
     }
   };
 
-  const handleGenerateChapter = async (chapNum: number) => {
+  const handleGenerateBeats = async (chapNum: number) => {
+    setBeatDraftingChapter(chapNum);
+    setShowBeatModal(true);
+    setBeatsLoading(true);
+    setGeneratedBeats("");
+    setBeatsError(null);
+
+    try {
+      const endpointURL = state.settings.draftingProvider === 'local' ? state.settings.apiUrl : '/api';
+      const guardrails = {
+        craft: state.settings.craftRules,
+        antiSlop: state.settings.antiSlop,
+        antiPatterns: state.settings.antiPatterns,
+      };
+
+      let previousChapterData = undefined;
+      if (chapNum > 1) {
+        const prevOutline = project.outline.find(o => o.chapterNumber === chapNum - 1);
+        const prevChapter = project.chapters.find(c => c.chapterNumber === chapNum - 1);
+        previousChapterData = {
+          title: prevOutline?.title,
+          summary: prevOutline?.summary,
+          content: prevChapter?.content
+        };
+      }
+
+      const result = await generateChapterBeats(
+        endpointURL,
+        state.settings.draftingModel,
+        effectiveSystemPrompt,
+        project.synopsis,
+        project.outline,
+        chapNum,
+        state.settings.draftingProvider,
+        guardrails,
+        project.povType || 'Third Person Limited',
+        project.characters,
+        previousChapterData,
+        seriesContext,
+        project.storySoFar,
+        project.sampleProse,
+        project.reservedLocations
+      );
+
+      setGeneratedBeats(result);
+    } catch (e: any) {
+      setBeatsError(e.message);
+    } finally {
+      setBeatsLoading(false);
+    }
+  };
+
+  const handleGenerateChapter = async (chapNum: number, approvedBeats?: string) => {
     setLoading(`chapter-${chapNum}`);
     setError(null);
     updateProject(project.id, {
@@ -282,7 +345,10 @@ export function Workspace() {
         project.characters,
         previousChapterData,
         seriesContext,
-        project.storySoFar
+        project.storySoFar,
+        project.sampleProse,
+        project.reservedLocations,
+        approvedBeats
       );
 
       // Automatically update the Story So Far
@@ -499,57 +565,90 @@ export function Workspace() {
           <div className="max-w-3xl mx-auto space-y-12 pb-12">
 
             {/* Book Settings (Pen Name & Prompt) */}
-            <section className="space-y-4 bg-white/40 p-4 rounded-xl border border-white/50 shadow-sm">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-6 h-6 rounded bg-slate-100 text-slate-500 flex items-center justify-center"><User size={14} /></div>
-                <h3 className="font-medium text-slate-900">Book Settings</h3>
-                {project.seriesId && (
-                  <span className="ml-2 text-xs px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full font-medium">
-                    Part of a Series
-                  </span>
-                )}
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Pen Name (Optional override)</label>
-                  <input
-                    type="text"
-                    value={project.penName || ''}
-                    onChange={e => updateProject(project.id, { penName: e.target.value })}
-                    placeholder={project.seriesId ? "Inheriting from series..." : "e.g. J.K. Rowling"}
-                    className="w-full text-sm p-2 border border-white/40 rounded-lg bg-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                  />
+            <section className="bg-white/40 rounded-xl border border-white/50 shadow-sm transition-all duration-300">
+              <button
+                onClick={() => setIsSettingsExpanded(!isSettingsExpanded)}
+                className="w-full flex items-center justify-between p-4 focus:outline-none text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded bg-slate-100 text-slate-500 flex items-center justify-center">
+                    <User size={14} />
+                  </div>
+                  <h3 className="font-medium text-slate-900 text-sm">Book Settings</h3>
+                  {project.seriesId && (
+                    <span className="ml-2 text-xs px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full font-medium">
+                      Part of a Series
+                    </span>
+                  )}
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Genre</label>
-                  <input
-                    type="text"
-                    value={project.genre || ''}
-                    onChange={e => updateProject(project.id, { genre: e.target.value })}
-                    placeholder="e.g. Cowboy Romance, Sci-Fi, Thriller"
-                    className="w-full text-sm p-2 border border-white/40 rounded-lg bg-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                  />
+                <div className="text-slate-400 hover:text-slate-600 transition-colors">
+                  {isSettingsExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                 </div>
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-slate-700 mb-1">System Prompt Override</label>
-                  <textarea
-                    value={project.systemPrompt || ''}
-                    onChange={e => updateProject(project.id, { systemPrompt: e.target.value })}
-                    placeholder={project.seriesId ? "Inheriting from series..." : "Optional: Provide a custom system prompt to override the global defaults for this book."}
-                    className="w-full text-sm p-2 border border-white/40 rounded-lg bg-white/30 min-h-[80px] resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                  />
+              </button>
+
+              {isSettingsExpanded && (
+                <div className="px-4 pb-4 pt-2 border-t border-slate-200/30 grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Pen Name (Optional override)</label>
+                    <input
+                      type="text"
+                      value={project.penName || ''}
+                      onChange={e => updateProject(project.id, { penName: e.target.value })}
+                      placeholder={project.seriesId ? "Inheriting from series..." : "e.g. J.K. Rowling"}
+                      className="w-full text-sm p-2 border border-white/40 rounded-lg bg-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Genre</label>
+                    <input
+                      type="text"
+                      value={project.genre || ''}
+                      onChange={e => updateProject(project.id, { genre: e.target.value })}
+                      placeholder="e.g. Cowboy Romance, Sci-Fi, Thriller"
+                      className="w-full text-sm p-2 border border-white/40 rounded-lg bg-white/30 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-medium text-slate-700 mb-1">System Prompt Override</label>
+                    <textarea
+                      value={project.systemPrompt || ''}
+                      onChange={e => updateProject(project.id, { systemPrompt: e.target.value })}
+                      placeholder={project.seriesId ? "Inheriting from series..." : "Optional: Provide a custom system prompt to override the global defaults for this book."}
+                      className="w-full text-sm p-2 border border-white/40 rounded-lg bg-white/30 min-h-[80px] resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Story So Far / Established Facts</label>
+                    <p className="text-[10px] text-slate-500 mb-2">Track what the reader already knows to prevent the AI from repeating reveals or re-introducing characters in later chapters.</p>
+                    <textarea
+                      value={project.storySoFar || ''}
+                      onChange={e => updateProject(project.id, { storySoFar: e.target.value })}
+                      placeholder="e.g., Wren drives a Subaru. Wyatt fought with his dad. Caleb's face was shown on TV..."
+                      className="w-full text-sm p-2 border border-white/40 rounded-lg bg-white/30 min-h-[100px] resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Reserved Locations / Objects</label>
+                    <p className="text-[10px] text-slate-500 mb-2">List specific locations or objects that are reserved for future chapters. The drafting engine will avoid having characters reach or interact with them yet.</p>
+                    <textarea
+                      value={project.reservedLocations || ''}
+                      onChange={e => updateProject(project.id, { reservedLocations: e.target.value })}
+                      placeholder='e.g., "the Relay Core chamber, the traction substation interior, the fused alien lock" — reserved until Ch12/22'
+                      className="w-full text-sm p-2 border border-white/40 rounded-lg bg-white/30 min-h-[80px] resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Sample Prose (Style Reference)</label>
+                    <p className="text-[10px] text-slate-500 mb-2">Paste a paragraph or scene of your own writing. The drafting engine will use this as a reference to match your voice, pacing, and style.</p>
+                    <textarea
+                      value={project.sampleProse || ''}
+                      onChange={e => updateProject(project.id, { sampleProse: e.target.value })}
+                      placeholder="Paste your sample prose style reference here..."
+                      className="w-full text-sm p-2 border border-white/40 rounded-lg bg-white/30 min-h-[120px] resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    />
+                  </div>
                 </div>
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-medium text-slate-700 mb-1">Story So Far / Established Facts</label>
-                  <p className="text-[10px] text-slate-500 mb-2">Track what the reader already knows to prevent the AI from repeating reveals or re-introducing characters in later chapters.</p>
-                  <textarea
-                    value={project.storySoFar || ''}
-                    onChange={e => updateProject(project.id, { storySoFar: e.target.value })}
-                    placeholder="e.g., Wren drives a Subaru. Wyatt fought with his dad. Caleb's face was shown on TV..."
-                    className="w-full text-sm p-2 border border-white/40 rounded-lg bg-white/30 min-h-[100px] resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                  />
-                </div>
-              </div>
+              )}
             </section>
 
             {/* Step 1: Premise */}
@@ -1179,7 +1278,7 @@ export function Workspace() {
                           </button>
                         )}
                         <button
-                          onClick={() => handleGenerateChapter(selectedChapter)}
+                          onClick={() => handleGenerateBeats(selectedChapter)}
                           disabled={loading === `chapter-${selectedChapter}`}
                           className="flex-shrink-0 flex items-center gap-2 px-3 py-1.5 bg-white/10 border border-white/40 shadow-sm hover:bg-white/30 text-slate-800 text-xs font-medium rounded-lg disabled:opacity-50 transition-colors"
                         >
@@ -1348,6 +1447,100 @@ export function Workspace() {
           <EditingTab project={project} effectiveSystemPrompt={effectiveSystemPrompt} seriesContext={seriesContext} />
         )}
       </div>
+
+      {showBeatModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div>
+                <h3 className="font-semibold text-slate-900 text-sm flex items-center gap-1.5">
+                  <PenTool size={16} className="text-indigo-500" />
+                  Pre-Draft Beats Verification (Chapter {beatDraftingChapter})
+                </h3>
+                <p className="text-[10px] text-slate-500">Confirm or refine the beats before generating chapter prose.</p>
+              </div>
+              <button
+                onClick={() => setShowBeatModal(false)}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+                disabled={loading !== null}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-4">
+              {beatsLoading ? (
+                <div className="flex flex-col items-center justify-center py-12 space-y-3">
+                  <Loader2 className="h-8 w-8 text-indigo-500 animate-spin" />
+                  <p className="text-sm font-medium text-slate-700 animate-pulse">Generating Beat Plan...</p>
+                </div>
+              ) : beatsError ? (
+                <div className="bg-rose-50 border border-rose-100 text-rose-800 rounded-xl p-4 text-sm">
+                  <p className="font-semibold mb-1">Failed to generate beats</p>
+                  <p className="text-xs text-rose-700">{beatsError}</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-slate-50 border border-slate-200/60 rounded-xl p-3 text-xs text-slate-600 space-y-2">
+                    <p className="font-semibold text-slate-700">Instructions:</p>
+                    <ul className="list-disc pl-4 space-y-1">
+                      <li>Review the AI's intended beats list below.</li>
+                      <li>Double-check that none of the beats cover events from future chapters or enter forbidden areas.</li>
+                      <li>You can edit the beats directly in the box below to guide the writing of the prose.</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+                      Proposed Beats Plan & Confirmation
+                    </label>
+                    <textarea
+                      value={generatedBeats}
+                      onChange={(e) => setGeneratedBeats(e.target.value)}
+                      className="w-full h-80 p-3 text-sm font-mono border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all resize-y leading-relaxed animate-none"
+                      placeholder="Beats plan..."
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-100 flex justify-end gap-2 bg-slate-50/50">
+              <button
+                onClick={() => setShowBeatModal(false)}
+                disabled={loading !== null}
+                className="px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => beatDraftingChapter !== null && handleGenerateBeats(beatDraftingChapter)}
+                disabled={beatsLoading || loading !== null}
+                className="px-4 py-2 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5"
+              >
+                {beatsLoading && <Loader2 size={12} className="animate-spin" />}
+                Regenerate Beats
+              </button>
+              <button
+                onClick={async () => {
+                  if (beatDraftingChapter !== null) {
+                    setShowBeatModal(false);
+                    await handleGenerateChapter(beatDraftingChapter, generatedBeats);
+                  }
+                }}
+                disabled={beatsLoading || loading !== null || !generatedBeats.trim()}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 text-white text-xs font-semibold rounded-lg disabled:opacity-50 transition-colors flex items-center gap-1.5"
+              >
+                {loading === `chapter-${beatDraftingChapter}` && <Loader2 size={12} className="animate-spin" />}
+                Generate Chapter Prose
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

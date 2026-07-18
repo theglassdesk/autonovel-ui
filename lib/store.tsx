@@ -75,6 +75,8 @@ export type NovelProject = {
   genre?: string;
   lastActiveTab?: 'foundation' | 'drafting' | 'editing';
   lastSelectedChapter?: number | null;
+  sampleProse?: string;
+  reservedLocations?: string;
 };
 
 export type AppState = {
@@ -214,7 +216,9 @@ function loadState(): AppState {
           chapters: (p.chapters || []).map((ch: any) => ({
             ...ch,
             status: ch.status === 'revised' ? 'drafted' : ch.status
-          }))
+          })),
+          sampleProse: p.sampleProse || '',
+          reservedLocations: p.reservedLocations || ''
         }));
       }
       return parsed;
@@ -310,7 +314,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       seriesId,
       genre: '',
       lastActiveTab: 'foundation',
-      lastSelectedChapter: null
+      lastSelectedChapter: null,
+      sampleProse: '',
+      reservedLocations: ''
     };
     
     setState(prev => {

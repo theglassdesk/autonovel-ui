@@ -354,7 +354,8 @@ export function ChatWorkspace() {
           if (project.chapters && project.chapters.length > 0) {
             const draftedChapters = project.chapters.filter(c => c.content && c.content.trim() !== '');
             if (draftedChapters.length > 0) {
-              systemPrompt += `\n\nDrafted Chapters:\n`;
+              systemPrompt += `\n\nDrafted Chapters (injected directly into your system instructions):\n`;
+              systemPrompt += `IMPORTANT: You have full access to these drafted chapters in your system prompt. If the user asks if you can see them, edit them, or reference them, acknowledge that you have them in your system prompt context and proceed with the request.\n`;
               draftedChapters.forEach(ch => {
                 const outlineItem = project.outline.find(o => o.chapterNumber === ch.chapterNumber);
                 const title = outlineItem ? outlineItem.title : `Chapter ${ch.chapterNumber}`;

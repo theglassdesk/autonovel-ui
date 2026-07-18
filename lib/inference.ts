@@ -399,7 +399,7 @@ Format your response EXACTLY as a JSON array of objects with keys: "chapterNumbe
   }
 }
 
-export async function generateChapter(
+export async function generateChapterBeats(
   apiUrl: string,
   model: string,
   systemPrompt: string,
@@ -408,12 +408,13 @@ export async function generateChapter(
   chapterNumber: number,
   provider?: string,
   guardrails?: { craft: string; antiSlop: string; antiPatterns: string },
-  existingContent?: string,
   povType?: string,
   characters?: any[],
   previousChapterData?: { title?: string; summary?: string; content?: string },
   seriesContext?: SeriesContext,
-  storySoFar?: string
+  storySoFar?: string,
+  sampleProse?: string,
+  reservedLocations?: string
 ) {
   const chapterDef = outline.find(c => c.chapterNumber === chapterNumber);
   if (!chapterDef) throw new Error("Chapter not found in outline");
@@ -456,24 +457,188 @@ export async function generateChapter(
     userPrompt += `\n`;
   }
 
-  const nextChapterDef = outline.find(c => c.chapterNumber === chapterNumber + 1);
-  if (nextChapterDef) {
-    userPrompt += `--- NEXT CHAPTER PREVIEW (DO NOT WRITE THESE EVENTS) ---\n`;
-    userPrompt += `Chapter ${chapterNumber + 1}: "${nextChapterDef.title}"\n`;
-    userPrompt += `Summary: ${nextChapterDef.summary}\n`;
-    userPrompt += `CRITICAL BOUNDARY: Do NOT progress the story into the events of the next chapter. Stop the narrative immediately before these events begin.\n\n`;
+  // Forward Boundary (lookahead up to 3 chapters)
+  const nextChapters = [];
+  for (let i = 1; i <= 3; i++) {
+    const nextCh = outline.find(c => c.chapterNumber === chapterNumber + i);
+    if (nextCh) {
+      nextChapters.push(nextCh);
+    }
+  }
+
+  if (nextChapters.length > 0 || (reservedLocations && reservedLocations.trim() !== '')) {
+    userPrompt += `--- FORWARD BOUNDARY (DO NOT WRITE ANY OF THIS) ---\n`;
+    userPrompt += `The following chapters have NOT happened yet. Do not write, foreshadow-as-action, or partially stage any of these events. If your draft is trending toward any of them, stop the chapter short instead.\n\n`;
+    
+    nextChapters.forEach(ch => {
+      userPrompt += `Chapter ${ch.chapterNumber}: "${ch.title}" — ${ch.summary}\n`;
+    });
+    
+    if (reservedLocations && reservedLocations.trim() !== '') {
+      userPrompt += `\nSPECIFIC LOCATIONS/OBJECTS RESERVED FOR LATER (do not have characters reach or interact with these yet): ${reservedLocations}\n`;
+    }
+    userPrompt += `\n`;
   }
 
   if (guardrails) {
     userPrompt += `--- CRITICAL WRITING GUARDRAILS ---\nYou MUST strictly adhere to the following rules while writing this chapter:\n\nCRAFT GUIDELINES:\n${guardrails.craft}\n\nBANNED WORDS (DO NOT USE THESE WORDS/PHRASES):\n${guardrails.antiSlop}\n\nANTI-PATTERNS (AVOID THESE STRUCTURES):\n${guardrails.antiPatterns}\n\n---------------------------------------\n\n`;
   }
 
-  const lengthInstruction = `\n\nCRITICAL LENGTH REQUIREMENT: Write a highly detailed, long-form chapter of **at least 2,500 words**. Pace the narrative slowly: write scenes out in real-time, expand conversations with physical beats and internal monologue, and describe the environment in detail. Do NOT summarize events or skip ahead.`;
+  if (sampleProse && sampleProse.trim() !== '') {
+    userPrompt += `--- STYLE REFERENCE (SAMPLE PROSE) ---\nYou MUST write this chapter to strictly match the voice, tone, style, pacing, vocabulary, and sentence structures of the following sample prose:\n\n${sampleProse}\n\n---------------------------------------\n\n`;
+  }
+
+  // Content Discipline
+  userPrompt += `--- CONTENT DISCIPLINE ---\n` +
+    `Only include plot events explicitly named in this chapter's outline summary, or direct, small-scale consequences of them. ` +
+    `Do not introduce new plot devices, discoveries, injuries, or escalations that aren't implied by the summary or established worldbuilding rules. ` +
+    `If you're unsure whether something is invention or a reasonable extrapolation, default to leaving it out.\n\n`;
+
+  // Instructions for beats only
+  userPrompt += `Write a sequential list of the specific beats (bullet points) you plan to cover in Chapter ${chapterNumber}: "${chapterDef.title}".\n\n` +
+    `Chapter Summary: ${chapterDef.summary}\n\n` +
+    `Overall Novel Synopsis: ${synopsis}\n\n` +
+    `Your beats list must strictly focus on events inside this chapter summary. Do NOT include any events from the Forward Boundary or the reserved locations.\n\n` +
+    `You MUST end your output with this exact confirmation statement:\n` +
+    `CONFIRM: none of these beats appear in the Forward Boundary list above. [yes/no]\n\n` +
+    `Return ONLY the bulleted list of beats and the confirmation statement. Do not write any prose, pleasantries, or wrapping markdown blocks. Begin immediately.`;
+
+  const messages: Message[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt }
+  ];
+
+  return generateChatCompletion(apiUrl, model, messages, 0.6, undefined, provider);
+}
+
+export async function generateChapter(
+  apiUrl: string,
+  model: string,
+  systemPrompt: string,
+  synopsis: string,
+  outline: any[],
+  chapterNumber: number,
+  provider?: string,
+  guardrails?: { craft: string; antiSlop: string; antiPatterns: string },
+  existingContent?: string,
+  povType?: string,
+  characters?: any[],
+  previousChapterData?: { title?: string; summary?: string; content?: string },
+  seriesContext?: SeriesContext,
+  storySoFar?: string,
+  sampleProse?: string,
+  reservedLocations?: string,
+  approvedBeats?: string
+) {
+  const chapterDef = outline.find(c => c.chapterNumber === chapterNumber);
+  if (!chapterDef) throw new Error("Chapter not found in outline");
+
+  let userPrompt = '';
+  
+  const seriesString = buildSeriesContextString(seriesContext);
+  if (seriesString) {
+    userPrompt += `${seriesString}\n\n`;
+  }
+
+  if (storySoFar && storySoFar.trim() !== '') {
+    userPrompt += `--- THE STORY SO FAR (ESTABLISHED FACTS) ---\n${storySoFar}\nCRITICAL INSTRUCTION: Do NOT re-introduce these facts, characters, or physical traits as if they are new. The reader already knows these facts.\n\n`;
+  }
+
+  let povInstruction = '';
+  if (povType && chapterDef.pov) {
+    povInstruction = `\nYou MUST write this chapter in ${povType} from the perspective of ${chapterDef.pov}. We only know what ${chapterDef.pov} knows, sees, and feels.\n\n`;
+  } else if (povType) {
+    povInstruction = `\nYou MUST write this chapter in ${povType}.\n\n`;
+  } else if (chapterDef.pov) {
+    povInstruction = `\nYou MUST write this chapter from the perspective of ${chapterDef.pov}. We only know what ${chapterDef.pov} knows, sees, and feels.\n\n`;
+  }
+
+  if (povInstruction) {
+    userPrompt += `--- NARRATIVE PERSPECTIVE ---${povInstruction}`;
+  }
+
+  if (characters && characters.length > 0) {
+    userPrompt += `\n--- CHARACTER PROFILES ---\n${JSON.stringify(characters, null, 2)}\n\n`;
+  }
+
+  if (previousChapterData) {
+    userPrompt += `--- PREVIOUS CHAPTER CONTEXT (For reference to avoid repetition) ---\n`;
+    if (previousChapterData.title) userPrompt += `Chapter ${chapterNumber - 1}: ${previousChapterData.title}\n`;
+    if (previousChapterData.summary) userPrompt += `Summary: ${previousChapterData.summary}\n`;
+    if (previousChapterData.content) {
+      userPrompt += `Content:\n${previousChapterData.content}\n`;
+    }
+    userPrompt += `\n`;
+  }
+
+  // Forward Boundary (lookahead up to 3 chapters)
+  const nextChapters = [];
+  for (let i = 1; i <= 3; i++) {
+    const nextCh = outline.find(c => c.chapterNumber === chapterNumber + i);
+    if (nextCh) {
+      nextChapters.push(nextCh);
+    }
+  }
+
+  if (nextChapters.length > 0 || (reservedLocations && reservedLocations.trim() !== '')) {
+    userPrompt += `--- FORWARD BOUNDARY (DO NOT WRITE ANY OF THIS) ---\n`;
+    userPrompt += `The following chapters have NOT happened yet. Do not write, foreshadow-as-action, or partially stage any of these events. If your draft is trending toward any of them, stop the chapter short instead.\n\n`;
+    
+    nextChapters.forEach(ch => {
+      userPrompt += `Chapter ${ch.chapterNumber}: "${ch.title}" — ${ch.summary}\n`;
+    });
+    
+    if (reservedLocations && reservedLocations.trim() !== '') {
+      userPrompt += `\nSPECIFIC LOCATIONS/OBJECTS RESERVED FOR LATER (do not have characters reach or interact with these yet): ${reservedLocations}\n`;
+    }
+    userPrompt += `\n`;
+  }
+
+  if (guardrails) {
+    userPrompt += `--- CRITICAL WRITING GUARDRAILS ---\nYou MUST strictly adhere to the following rules while writing this chapter:\n\nCRAFT GUIDELINES:\n${guardrails.craft}\n\nBANNED WORDS (DO NOT USE THESE WORDS/PHRASES):\n${guardrails.antiSlop}\n\nANTI-PATTERNS (AVOID THESE STRUCTURES):\n${guardrails.antiPatterns}\n\n---------------------------------------\n\n`;
+  }
+
+  if (sampleProse && sampleProse.trim() !== '') {
+    userPrompt += `--- STYLE REFERENCE (SAMPLE PROSE) ---\nYou MUST write this chapter to strictly match the voice, tone, style, pacing, vocabulary, and sentence structures of the following sample prose:\n\n${sampleProse}\n\n---------------------------------------\n\n`;
+  }
+
+  // Length Policy
+  userPrompt += `--- LENGTH POLICY ---\n` +
+    `Target length: 2500–3500 words. If you reach the end of this chapter's outlined events before hitting the target, DO NOT invent new plot beats or advance toward future chapters to fill space. Expand instead through:\n\n` +
+    `interiority (the POV character's unresolved thoughts, physical sensations,\n` +
+    `memories triggered by the scene)\n\n` +
+    `sensory grounding (the specific texture of this location, this weather, this hour)\n` +
+    `secondary-character presence and reaction\n` +
+    `dialogue subtext and things characters almost say but don't\n\n` +
+    `Running short is an acceptable outcome. Advancing the plot to compensate is not.\n\n`;
+
+  // Content Discipline
+  userPrompt += `--- CONTENT DISCIPLINE ---\n` +
+    `Only include plot events explicitly named in this chapter's outline summary, or direct, small-scale consequences of them. ` +
+    `Do not introduce new plot devices, discoveries, injuries, or escalations that aren't implied by the summary or established worldbuilding rules. ` +
+    `If you're unsure whether something is invention or a reasonable extrapolation, default to leaving it out.\n\n`;
+
+  if (approvedBeats && approvedBeats.trim() !== '') {
+    userPrompt += `--- APPROVED BEATS TO COVER ---\nYou MUST write the chapter prose by strictly following this sequential plan (approved by the editor):\n\n${approvedBeats}\n\nCRITICAL DIRECTION: Do NOT invent new plot beats, discoveries, injuries, or escalations. Only expand on the beats listed above.\n\n`;
+  }
+
+  const hasBeats = approvedBeats && approvedBeats.trim() !== '';
+
+  const beatCheckInstruction = hasBeats ? '' : `\n\nBefore beginning the chapter prose, you MUST output a pre-draft beat check in this exact format:\n\n` +
+    `BEATS I INTEND TO COVER (in order):\n` +
+    `- [Brief description of beat 1]\n` +
+    `- [Brief description of beat 2]\n` +
+    `- ...\n` +
+    `CONFIRM: none of these beats appear in the Forward Boundary list above. [yes/no]\n\n` +
+    `Begin outputting the beat check immediately, then start the chapter content directly below it. Do not include any out-of-character AI pleasantries.`;
 
   if (existingContent && existingContent.trim() !== '') {
-    userPrompt += `Please rewrite the following chapter based on the rules above and the summary below.${lengthInstruction}\n\nWrite Chapter ${chapterNumber}: "${chapterDef.title}".\n\nChapter Summary: ${chapterDef.summary}\n\nOverall Novel Synopsis: ${synopsis}\n\nEnsure the chapter is well-written, engaging, and flows naturally. Do not include any out-of-character AI pleasantries. Begin the text immediately.\n\n--- EXISTING CHAPTER DRAFT TO REWRITE ---\n${existingContent}`;
+    userPrompt += `Please rewrite the following chapter based on the rules, length policy, and content discipline above and the summary below.${beatCheckInstruction}\n\nWrite Chapter ${chapterNumber}: "${chapterDef.title}".\n\nChapter Summary: ${chapterDef.summary}\n\nOverall Novel Synopsis: ${synopsis}\n\n--- EXISTING CHAPTER DRAFT TO REWRITE ---\n${existingContent}`;
   } else {
-    userPrompt += `Write Chapter ${chapterNumber}: "${chapterDef.title}".\n\nChapter Summary: ${chapterDef.summary}\n\nOverall Novel Synopsis: ${synopsis}\n\nEnsure the chapter is well-written, engaging, and flows naturally. Do not include any out-of-character AI pleasantries. Begin the text immediately.${lengthInstruction}`;
+    userPrompt += `Write Chapter ${chapterNumber}: "${chapterDef.title}".\n\nChapter Summary: ${chapterDef.summary}\n\nOverall Novel Synopsis: ${synopsis}.${beatCheckInstruction}`;
+    if (hasBeats) {
+      userPrompt += `\n\nEnsure the chapter is well-written, engaging, and flows naturally. Do not include any out-of-character AI pleasantries. Begin the text immediately.`;
+    }
   }
 
   const messages: Message[] = [
@@ -603,6 +768,11 @@ export async function analyzeManuscript(
     userPrompt += `--- BANNED WORDS & PHRASES (ANTI-SLOP) ---\n${antiSlop}\n\n`;
   }
 
+  // Include Style Reference (Sample Prose) for proseMatch or Full analysis
+  if ((toolType === 'proseMatch' || toolType === 'full') && project.sampleProse && project.sampleProse.trim() !== '') {
+    userPrompt += `--- STYLE REFERENCE (SAMPLE PROSE) ---\n${project.sampleProse}\n\n`;
+  }
+
   userPrompt += `--- MANUSCRIPT ---\n`;
   for (const ch of chapters) {
     userPrompt += `[CHAPTER ${ch.chapterNumber}]\n${ch.content}\n\n`;
@@ -644,8 +814,12 @@ export async function analyzeManuscript(
       case 'betaReader':
           toolInstruction = `Act as a beta reader matching the target audience for a ${genre || 'fiction'} novel. Provide overall reader feedback and critique. Highlight specific scenes, paragraphs, or character actions where the reader is likely to lose interest, get bored, feel disconnected, or stop reading entirely. Explain why these issues occur and how they affect reader engagement.`;
           break;
+      case 'proseMatch':
+          toolInstruction = 'Compare the manuscript chapters against the Style Reference (Sample Prose). Analyze how well the manuscript matches the tone, style, sentence length/variation, vocabulary, pacing, and overall voice of the sample prose. Identify areas that deviate from the sample prose style, and suggest specific edits (rewrites) to bring the manuscript in alignment with the style reference.';
+          break;
       case 'full':
-          toolInstruction = 'Provide a comprehensive developmental and line-editing analysis covering all aspects: pacing, readability, dialogue, cliches, inconsistencies, and grammar.';
+          toolInstruction = 'Provide a comprehensive developmental and line-editing analysis covering all aspects: pacing, readability, dialogue, cliches, inconsistencies, and grammar.' +
+                            (project.sampleProse ? ' Also analyze style alignment against the Style Reference (Sample Prose) and identify where the writing deviates from it.' : '');
           break;
   }
 
