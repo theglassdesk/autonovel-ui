@@ -55,11 +55,11 @@ The Editing tab hosts the copyediting, line-editing, and formatting tools.
 * **Selected Prose Highlight / Inline Edit**: Highlight any sentence or paragraph in the editor to request inline changes or rewrites.
 * **Manuscript Analysis**: Run analytical checks on pacing, dialogue, readability, repetitiveness, or check style matching against your Sample Prose.
 
+![Selected Prose Highlight / Inline Edit](docs/images/editing-highlight.png)
+
 ![Editing Tab Interface](docs/images/editing-tab.png)
 
 ![Editing Tab Interface - Analysis](docs/images/editing-tab-2.png)
-
-![Selected Prose Highlight / Inline Edit](docs/images/editing-highlight.png)
 
 ---
 
