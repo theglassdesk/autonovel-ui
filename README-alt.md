@@ -6,8 +6,9 @@ AutoNovel UI is a streamlined desktop-style interface for local and cloud novel 
 
 ## Workspace Overview
 
-![Workspace Overview Placeholder](docs/images/workspace-overview.png)
-> 📸 **Screenshot Opportunity**: Capture the main application workspace showing the sidebar and current project loaded. Save it to `docs/images/workspace-overview.png`.
+![Workspace Overview](docs/images/workspace-overview.png)
+
+> 📹 **Video Demo**: View the screen recording in [docs/images/cast-recording.mov](docs/images/cast-recording.mov).
 
 ---
 
@@ -28,8 +29,7 @@ The Foundation tab is the "story bible" where you establish the core facts and g
   * **Characters**: Automatically build out 8-10 characters (including protagonistic details, want/need, core lies, and physical descriptions).
   * **Outline**: Build or expand a complete chapter outline table with POV tracking (supporting Dual-POV alternating structures).
 
-![Foundation Tab Placeholder](docs/images/foundation-tab.png)
-> 📸 **Screenshot Opportunity**: Capture the expanded Book Settings and character list under the Foundation Tab. Save to `docs/images/foundation-tab.png`.
+![Foundation Tab](docs/images/foundatioin-tab.png)
 
 ---
 
@@ -43,8 +43,9 @@ Drafting prose is handled in a controlled two-step pipeline to prevent hallucina
 * **Step 2: Generate Chapter Prose**:
   * Once approved, the model writes the chapter prose by strictly expanding on your beats list, adhering to the Length Policy (2,500–3,500 words) and Content Discipline rules.
 
-![Beats Check Modal Placeholder](docs/images/beats-check-modal.png)
-> 📸 **Screenshot Opportunity**: Trigger a draft and capture the "Pre-Draft Beats Verification" modal listing the generated beats list and confirmation check. Save to `docs/images/beats-check-modal.png`.
+![Pre-Draft Beats Verification Modal](docs/images/beats-check-modal.png)
+
+![Pre-Draft Beats Verification Modal - Step 2](docs/images/beats-check-modal-2.png)
 
 ---
 
@@ -54,8 +55,23 @@ The Editing tab hosts the copyediting, line-editing, and formatting tools.
 * **Selected Prose Highlight / Inline Edit**: Highlight any sentence or paragraph in the editor to request inline changes or rewrites.
 * **Manuscript Analysis**: Run analytical checks on pacing, dialogue, readability, repetitiveness, or check style matching against your Sample Prose.
 
-![Editing Interface Placeholder](docs/images/editing-tab.png)
-> 📸 **Screenshot Opportunity**: Highlight text in the editor or capture the Editing analysis pane on the right. Save to `docs/images/editing-tab.png`.
+![Editing Tab Interface](docs/images/editing-tab.png)
+
+![Editing Tab Interface - Analysis](docs/images/editing-tab-2.png)
+
+![Selected Prose Highlight / Inline Edit](docs/images/editing-highlight.png)
+
+---
+
+## Writing Guardrails
+
+This app includes built-in "Writing Guardrails" designed to prevent local (and cloud) models from generating "AI slop." You can configure these in the Settings menu:
+
+* **CRAFT.md Rules**: High-level instructions for good prose (Show don't tell, grounded descriptions).
+* **ANTI-SLOP.md**: A list of banned, overused AI words (tapestry, testament, delve).
+* **ANTI-PATTERNS.md**: Structural elements to avoid (neat wrap-ups, rhetorical questions at chapter ends).
+
+These instructions act as an "immune system" during the drafting phase to ensure higher-quality output.
 
 ---
 
@@ -99,5 +115,6 @@ If you want to run completely local models (e.g. Llama-3, Mistral) via LM Studio
 4. Set the API endpoint url to `http://127.0.0.1:1234/v1` (using the IP address avoids browser-level mixed-content blocks).
 5. Specify the model name.
 
-![Settings Modal Placeholder](docs/images/settings-modal.png)
-> 📸 **Screenshot Opportunity**: Capture the global Settings Modal showing API endpoints and model selections. Save to `docs/images/settings-modal.png`.
+![Settings Modal Overview](docs/images/settings-modal.png)
+
+![Settings Modal Options](docs/images/settings-modal-2.png)
